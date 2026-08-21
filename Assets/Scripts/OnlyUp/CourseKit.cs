@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -138,10 +139,13 @@ namespace OnlyUp
             GameObject visual = CreatePrimitiveVisual(platform.transform, PrimitiveType.Cube, size);
             visualSwap.visual = visual.transform;
 
-            // 에디터에서 Visual을 늘리거나 옮기면 이 콜라이더도 자동으로 따라오게 동기화한다
+            // 에디터에서 Visual을 늘리거나 옮기면 이 콜라이더도 자동으로 따라오게 동기화한다.
+            // 발판은 capThickness를 켜서 콜라이더 두께를 얇게 고정한다 — 모델에 달린 장식(토퍼 등)이
+            // 바운즈 높이를 부풀려도 다음 발판까지의 점프 공간이 항상 확보되어 캐릭터가 위쪽 발판에 끼지 않는다.
             PlatformColliderSync sync = platform.AddComponent<PlatformColliderSync>();
             sync.targetCollider = collider;
             sync.visual = visual.transform;
+            sync.capThickness = true;
 
             if (isGoal)
             {
@@ -156,20 +160,162 @@ namespace OnlyUp
 
                 platform.AddComponent<Goal>();
             }
+            else
+            {
+                // Resources/Platforms에 VARCO 3D로 만든 발판 모델이 있으면 그 중 하나를 무작위로 골라 교체하고,
+                // 없으면(모델이 아직 없을 때) 기존처럼 연한 보라색 큐브로 대체한다.
+                GameObject[] rockPrefabs = Resources.LoadAll<GameObject>("Platforms");
+                if (rockPrefabs != null && rockPrefabs.Length > 0)
+                {
+                    GameObject chosen = rockPrefabs[Random.Range(0, rockPrefabs.Length)];
+                    // SwapVisual이 기존 Visual(큐브)의 로컬 위치/회전/스케일을 그대로 새 모델에 적용해주므로
+                    // 발판 크기(size)에 맞춰 자동으로 늘어난다.
+                    Transform newVisual = visualSwap.SwapVisual(chosen);
+
+                    // 별/쿠션 모양처럼 각지고 오목한 실제 모델은 사각형 BoxCollider와 눈에 보이는 모양이
+                    // 많이 어긋난다(구석에서 공중에 뜨거나, 뾰족한 부분을 밟았는데 그대로 통과하는 등).
+                    // 그래서 이 경우엔 BoxCollider 대신 모델 메시로 직접 만든 콜라이더로 교체해 눈에 보이는
+                    // 모양과 최대한 맞춘다.
+                    DestroySafe(sync);
+                    DestroySafe(collider);
+                    CreateModelCollisionMesh(platform, newVisual);
+                }
+                else
+                {
+                    SetUniqueColor(visual.GetComponent<Renderer>(), new Color(0.78f, 0.65f, 0.95f));
+                }
+            }
 
             return platform;
         }
 
         /// <summary>
+        /// 발판 콜라이더 두께의 최댓값. BoxCollider capThickness와 같은 값을 써서, 어떤 방식으로
+        /// 콜라이더를 만들든 다음 발판까지의 점프 공간(헤드룸)이 항상 똑같이 확보되게 한다.
+        /// </summary>
+        private const float PlatformColliderMaxThickness = 0.4f;
+
+        /// <summary>
+        /// 실제 3D 모델(별/쿠션처럼 각지고 오목한 형태)의 위에서 내려다본 윤곽선(2D 볼록 껍질)을 뽑아서,
+        /// 그 윤곽선을 얇게(PlatformColliderMaxThickness) 압출한 프리즘 모양으로 콜라이더를 만든다.
+        /// 이렇게 하면 사각형 BoxCollider보다 눈에 보이는 모양과 충돌 범위가 훨씬 비슷해지고
+        /// (별 모서리 공중 뜸/구멍으로 통과 같은 문제가 줄어듦), 메시 전체(수천 개 정점)를 그대로
+        /// 컨벡스 콜라이더에 넘길 때 생기는 PhysX 정점 제한(256개) 경고도 피할 수 있다.
+        /// 두께를 얇게 하는 이유는 모델에 달린 장식(작은 토퍼 등)까지 그대로 쓰면 콜라이더가 높아져서
+        /// 다음 발판까지의 점프 공간(헤드룸)이 줄어들 수 있기 때문이다. 윗면(착지면) 위치는 그대로 둔다.
+        /// </summary>
+        private static void CreateModelCollisionMesh(GameObject platform, Transform visual)
+        {
+            MeshFilter meshFilter = visual.GetComponentInChildren<MeshFilter>();
+            if (meshFilter == null || meshFilter.sharedMesh == null) return;
+
+            Mesh sourceMesh = meshFilter.sharedMesh;
+            Transform meshTransform = meshFilter.transform;
+            Vector3[] vertices = sourceMesh.vertices;
+
+            float maxLocalY = float.MinValue;
+            var footprint = new List<Vector2>(vertices.Length);
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                if (vertices[i].y > maxLocalY) maxLocalY = vertices[i].y;
+                footprint.Add(new Vector2(vertices[i].x, vertices[i].z));
+            }
+
+            List<Vector2> hull = ComputeConvexHull2D(footprint);
+            if (hull.Count < 3) return; // 퇴화된 모양(흔치 않음) — 콜라이더 없이 두는 것보다는 기존 로직이 낫지만 매우 드문 케이스
+
+            float scaleY = meshTransform.lossyScale.y;
+            float maxThicknessLocal = scaleY > 0.0001f ? PlatformColliderMaxThickness / scaleY : PlatformColliderMaxThickness;
+            float floorLocalY = maxLocalY - maxThicknessLocal;
+
+            int hullCount = hull.Count;
+            Vector3[] prismVerts = new Vector3[hullCount * 2];
+            for (int i = 0; i < hullCount; i++)
+            {
+                prismVerts[i] = new Vector3(hull[i].x, floorLocalY, hull[i].y);
+                prismVerts[hullCount + i] = new Vector3(hull[i].x, maxLocalY, hull[i].y);
+            }
+
+            var tris = new List<int>();
+            for (int i = 1; i < hullCount - 1; i++) // 아랫면
+            {
+                tris.Add(0); tris.Add(i + 1); tris.Add(i);
+            }
+            for (int i = 1; i < hullCount - 1; i++) // 윗면
+            {
+                tris.Add(hullCount); tris.Add(hullCount + i); tris.Add(hullCount + i + 1);
+            }
+            for (int i = 0; i < hullCount; i++) // 옆면
+            {
+                int next = (i + 1) % hullCount;
+                tris.Add(i); tris.Add(hullCount + i); tris.Add(hullCount + next);
+                tris.Add(i); tris.Add(hullCount + next); tris.Add(next);
+            }
+
+            Mesh collisionMesh = new Mesh();
+            collisionMesh.vertices = prismVerts;
+            collisionMesh.triangles = tris.ToArray();
+            collisionMesh.RecalculateBounds();
+            collisionMesh.RecalculateNormals();
+
+            GameObject collisionGO = new GameObject("CollisionMesh");
+            collisionGO.transform.SetParent(platform.transform, false);
+            collisionGO.transform.position = meshTransform.position;
+            collisionGO.transform.rotation = meshTransform.rotation;
+            collisionGO.transform.localScale = meshTransform.lossyScale;
+
+            MeshCollider meshCollider = collisionGO.AddComponent<MeshCollider>();
+            meshCollider.sharedMesh = collisionMesh;
+            meshCollider.convex = true;
+        }
+
+        /// <summary>
+        /// Andrew's monotone chain 알고리즘으로 2D 점 집합의 볼록 껍질(convex hull)을 구한다.
+        /// </summary>
+        private static List<Vector2> ComputeConvexHull2D(List<Vector2> points)
+        {
+            points.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+            int n = points.Count;
+            if (n < 3) return points;
+
+            Vector2[] hull = new Vector2[2 * n];
+            int k = 0;
+
+            for (int i = 0; i < n; i++)
+            {
+                while (k >= 2 && Cross2D(hull[k - 2], hull[k - 1], points[i]) <= 0) k--;
+                hull[k++] = points[i];
+            }
+
+            int lower = k + 1;
+            for (int i = n - 2; i >= 0; i--)
+            {
+                while (k >= lower && Cross2D(hull[k - 2], hull[k - 1], points[i]) <= 0) k--;
+                hull[k++] = points[i];
+            }
+
+            var result = new List<Vector2>(k - 1);
+            for (int i = 0; i < k - 1; i++) result.Add(hull[i]);
+            return result;
+        }
+
+        private static float Cross2D(Vector2 o, Vector2 a, Vector2 b)
+        {
+            return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+        }
+
+        /// <summary>
         /// 발판 위에 고정된 장애물(빨간 큐브)을 놓는다. 점프로 넘거나 옆으로 피해야 하며,
         /// 부딪히면 Obstacle 값에 따라 플레이어가 튕겨나간다.
+        /// obstaclePosition은 발판 중심이 아니라 (필요시) 한쪽으로 치우친 실제 배치 위치를 받는다 —
+        /// 발판이 작을 때 장애물을 정중앙에 두면 발판 전체를 거의 다 차지해서 착지할 곳이 없어지므로,
+        /// 호출부(GameBootstrap)에서 가장자리 쪽으로 옮긴 위치를 넘겨 반대편에 착지 공간을 확보한다.
         /// </summary>
-        public static void CreateStaticObstacle(Transform parent, Vector3 platformPosition, Vector3 platformSize, float knockbackForce = 14f, float knockbackUpward = 6f)
+        public static void CreateStaticObstacle(Transform parent, Vector3 obstaclePosition, Vector3 platformSize, Vector3 obstacleSize, float knockbackForce = 14f, float knockbackUpward = 6f)
         {
-            Vector3 obstacleSize = new Vector3(1f, 1f, 1f);
             GameObject obstacle = new GameObject("Obstacle_Static");
             obstacle.transform.SetParent(parent, false);
-            obstacle.transform.position = platformPosition + new Vector3(0f, platformSize.y * 0.5f + obstacleSize.y * 0.5f, 0f);
+            obstacle.transform.position = obstaclePosition + new Vector3(0f, platformSize.y * 0.5f + obstacleSize.y * 0.5f, 0f);
 
             BoxCollider collider = obstacle.AddComponent<BoxCollider>();
             collider.size = obstacleSize;
@@ -192,10 +338,8 @@ namespace OnlyUp
         /// 지정한 두 지점 사이를 왕복하는 장애물(주황색 큐브)을 놓는다. 타이밍을 맞춰 지나가거나
         /// 뛰어넘어야 하며, 부딪히면 정지 장애물보다 더 세게 튕겨나간다.
         /// </summary>
-        public static void CreateMovingObstacle(Transform parent, Vector3 pointA, Vector3 pointB, float speed = 0.6f, float knockbackForce = 16f, float knockbackUpward = 7f)
+        public static void CreateMovingObstacle(Transform parent, Vector3 pointA, Vector3 pointB, Vector3 obstacleSize, float speed = 0.6f, float knockbackForce = 16f, float knockbackUpward = 7f)
         {
-            Vector3 obstacleSize = new Vector3(1f, 1f, 1f);
-
             GameObject obstacle = new GameObject("Obstacle_Moving");
             obstacle.transform.SetParent(parent, false);
             obstacle.transform.position = pointA;
@@ -300,6 +444,50 @@ namespace OnlyUp
                 follow = mainCamera.gameObject.AddComponent<CameraFollow>();
             }
             follow.target = playerTransform;
+
+            // 카메라를 만든 김에 발판(연보라)·캐릭터(파란색)와 어울리는 배경도 함께 설정한다
+            SetupEnvironment(mainCamera);
+        }
+
+        /// <summary>
+        /// 배경을 발판(연보라)·캐릭터(파란색) 톤에 어울리는 파스텔 하늘색으로 맞추고,
+        /// 같은 색의 안개를 살짝 깔아 멀리 있는 발판이 배경으로 자연스럽게 사라지도록 한다.
+        /// 텍스처/스카이박스 에셋 없이 Camera의 단색 배경 + Fog만 사용해서(기본 Unity 기능만),
+        /// WebGL 빌드에서도 셰이더 호환성 문제 없이 항상 동일하게 보인다.
+        /// </summary>
+        public static void SetupEnvironment(Camera camera)
+        {
+            if (camera == null) return;
+
+            Color skyColor = new Color(0.74f, 0.83f, 0.97f); // 파스텔 하늘색
+
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = skyColor;
+
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = skyColor;
+            RenderSettings.fogStartDistance = 40f;
+            RenderSettings.fogEndDistance = 140f;
+        }
+
+        /// <summary>
+        /// 플레이어 높이에 따라 하늘/안개 색이 지상 색 → 정상(우주) 색으로 서서히 바뀌도록
+        /// 카메라에 <see cref="HeightSkyController"/>를 붙이고 시작/끝 높이를 설정한다.
+        /// SetupEnvironment가 정한 초기 색을 그대로 groundColor로 이어받아 시작 순간에 색이 튀지 않게 한다.
+        /// </summary>
+        public static void SetupHeightSky(Camera camera, Transform player, float startHeight, float endHeight)
+        {
+            if (camera == null) return;
+
+            HeightSkyController sky = camera.GetComponent<HeightSkyController>();
+            if (sky == null)
+            {
+                sky = camera.gameObject.AddComponent<HeightSkyController>();
+            }
+            sky.player = player;
+            sky.startHeight = startHeight;
+            sky.endHeight = endHeight;
         }
 
         /// <summary>
@@ -338,6 +526,24 @@ namespace OnlyUp
             heightUI.player = playerTransform;
             heightUI.heightText = heightText;
             heightUI.startHeight = startHeight;
+
+            GameObject fallCountGO = new GameObject("FallCountText");
+            fallCountGO.transform.SetParent(canvasGO.transform, false);
+            Text fallCountText = fallCountGO.AddComponent<Text>();
+            fallCountText.font = builtinFont;
+            fallCountText.fontSize = 36;
+            fallCountText.color = Color.white;
+            fallCountText.alignment = TextAnchor.UpperRight;
+            RectTransform fallCountRT = fallCountText.rectTransform;
+            fallCountRT.anchorMin = new Vector2(1f, 1f);
+            fallCountRT.anchorMax = new Vector2(1f, 1f);
+            fallCountRT.pivot = new Vector2(1f, 1f);
+            fallCountRT.anchoredPosition = new Vector2(-20f, -20f);
+            fallCountRT.sizeDelta = new Vector2(300f, 60f);
+
+            FallCountUI fallCountUI = canvasGO.AddComponent<FallCountUI>();
+            fallCountUI.respawn = playerTransform.GetComponent<RespawnController>();
+            fallCountUI.fallCountText = fallCountText;
 
             GameObject panelGO = new GameObject("GameClearPanel");
             panelGO.transform.SetParent(canvasGO.transform, false);
