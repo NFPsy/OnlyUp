@@ -13,6 +13,9 @@ namespace OnlyUp
         public Vector3 spawnPosition;   // 현재 리스폰될 위치 (체크포인트 도입 시 여기만 갱신하면 됨)
         public float fallLimitY = -20f; // 이 높이보다 아래로 떨어지면 리스폰
 
+        [Tooltip("지금까지 낙사해서 리스폰된 횟수 (FallCountUI가 화면에 표시)")]
+        public int fallCount = 0;
+
         private CharacterController controller;
         private PlayerController playerController;
 
@@ -41,6 +44,8 @@ namespace OnlyUp
 
         public void Respawn()
         {
+            fallCount++;
+
             // CharacterController는 활성화된 상태에서 transform.position을 직접 바꾸면
             // 내부 충돌 처리와 충돌할 수 있으므로, 잠시 비활성화한 뒤 위치를 옮기고 다시 켠다.
             controller.enabled = false;
