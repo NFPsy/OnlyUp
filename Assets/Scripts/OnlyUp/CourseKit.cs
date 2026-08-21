@@ -373,6 +373,29 @@ namespace OnlyUp
         }
 
         /// <summary>
+        /// 배경 음악을 재생한다. 씬에 이미 "BGM" 오브젝트가 있으면(중복 생성 방지) 건드리지 않는다.
+        /// Resources/Audio에 클립이 없으면 조용히 아무것도 만들지 않는다.
+        /// </summary>
+        public static void SetupBackgroundMusic()
+        {
+            if (GameObject.Find("BGM") != null) return;
+
+            AudioClip clip = Resources.Load<AudioClip>("Audio/BGM_StarHopParade");
+            if (clip == null) return;
+
+            GameObject bgmGO = new GameObject("BGM");
+            AudioSource source = bgmGO.AddComponent<AudioSource>();
+            source.clip = clip;
+            source.loop = true;
+            source.volume = 0.4f;
+            source.playOnAwake = false;
+            // BackgroundMusicPlayer.Start()에서 재생한다 — 이 오브젝트를 만든 바로 그 프레임
+            // (GameBootstrap.Awake)에서 곧바로 Play()를 호출하면 아직 컴포넌트 초기화가 끝나지
+            // 않아 조용히 무시되는 경우가 있어서, 씬의 모든 Awake가 끝난 뒤로 재생을 미룬다.
+            bgmGO.AddComponent<BackgroundMusicPlayer>();
+        }
+
+        /// <summary>
         /// 플레이어 로직(CharacterController + 조작/리스폰 스크립트) + Visual(Capsule+눈)을 생성한다.
         /// </summary>
         public static GameObject CreatePlayer(Vector3 spawnPosition, float fallLimitY)
@@ -415,6 +438,12 @@ namespace OnlyUp
             {
                 playerController.cameraTransform = mainCamera.transform;
             }
+
+            // 점프 효과음: Resources/Audio에 있으면 재생하고, 없으면 조용히 건너뛴다
+            AudioSource jumpAudioSource = player.AddComponent<AudioSource>();
+            jumpAudioSource.playOnAwake = false;
+            playerController.jumpAudioSource = jumpAudioSource;
+            playerController.jumpClip = Resources.Load<AudioClip>("Audio/SFX_JumpChirp");
 
             RespawnController respawn = player.AddComponent<RespawnController>();
             respawn.spawnPosition = spawnPosition;

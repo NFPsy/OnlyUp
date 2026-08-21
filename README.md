@@ -127,6 +127,7 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 | `GameClearUI.cs` | GAME CLEAR 패널 표시/숨김 |
 | `HeightUI.cs` | 현재 높이 실시간 표시 (좌측 상단) |
 | `FallCountUI.cs` | 낙사 후 리스폰된 횟수 실시간 표시 (우측 상단) |
+| `BackgroundMusicPlayer.cs` | 배경 음악 재생 (생성 즉시 Play() 호출 시 씹히는 문제 방지용) |
 | `Obstacle.cs` | 장애물 마커 (넉백 힘 값 보유) |
 | `MovingObstacle.cs` | 두 지점을 왕복하는 장애물 이동 |
 | `VisualSwapTarget.cs` | Visual 자식 교체(모델 스왑)를 위한 공용 컴포넌트 |
@@ -164,6 +165,18 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 - **VARCO 3D 연동**: `VisualSwapTarget`을 통해 발판/플레이어/장애물의 Visual을 실제 생성 모델로 교체 가능하도록 준비되어 있음
 - **스테이지 재도입**: `Goal.nextSceneName`에 다음 씬 이름만 지정하면 언제든 다시 씬을 이어붙일 수 있음 (지금은 비워둬서 단일 스테이지)
 - **새 장애물/발판 종류**: `CourseKit`에 생성 함수를 추가하고 Bootstrap의 배치 로직에서 호출하면 됨
+
+## 사운드
+
+`Assets/Resources/Audio/`에 있는 클립을 런타임에 `Resources.Load`로 불러와 코드로 재생한다
+(다른 발판/캐릭터 리소스와 동일한 패턴).
+
+- `BGM_StarHopParade.mp3`: 배경 음악. `CourseKit.SetupBackgroundMusic()`이 씬에 "BGM" 오브젝트를
+  만들어 루프 재생한다(볼륨 0.4). `BackgroundMusicPlayer.Start()`에서 재생하는 이유는, 오브젝트를
+  만든 바로 그 프레임(`GameBootstrap.Awake`)에서 곧바로 `AudioSource.Play()`를 호출하면 아직
+  컴포넌트 초기화가 끝나지 않아 조용히 무시되는 경우가 있어서, 씬의 모든 Awake가 끝난 뒤(Start
+  단계)로 재생을 미루기 위함이다.
+- `SFX_JumpChirp.wav`: 점프 효과음. `PlayerController`가 Space로 점프할 때마다 재생한다.
 
 ## 알려진 제한사항
 

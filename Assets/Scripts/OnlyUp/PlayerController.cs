@@ -25,6 +25,11 @@ namespace OnlyUp
         [Header("장애물 넉백 설정")]
         public float knockbackDrag = 18f; // 넉백 속도가 초당 이만큼씩 줄어들어 서서히 원래 조작으로 돌아온다
 
+        [Header("사운드")]
+        [Tooltip("점프할 때 재생할 효과음 (CourseKit.CreatePlayer가 할당)")]
+        public AudioClip jumpClip;
+        public AudioSource jumpAudioSource;
+
         [Header("참조")]
         [Tooltip("카메라 기준으로 이동 방향을 계산하기 위한 카메라 Transform (GameBootstrap이 할당)")]
         public Transform cameraTransform;
@@ -108,6 +113,11 @@ namespace OnlyUp
             {
                 // v = sqrt(2 * h * g) 공식으로 원하는 점프 높이에 맞는 초기 속도 계산
                 verticalVelocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+
+                if (jumpAudioSource != null && jumpClip != null)
+                {
+                    jumpAudioSource.PlayOneShot(jumpClip);
+                }
 
                 if (animator != null)
                 {
