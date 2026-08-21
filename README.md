@@ -20,7 +20,27 @@
 - **WASD**: 이동 (카메라가 보는 방향 기준)
 - **Space**: 점프
 - **마우스 좌클릭 후 드래그**: 카메라 각도 회전 (포인터 락, `Esc`로 해제)
+- **Esc**: 일시정지 메뉴 열기/닫기 (다시 누르면 재개)
 - 방향키/WASD는 카메라 각도에 전혀 영향을 주지 않음 — 카메라는 마우스로만 회전하는 궤도(orbit) 카메라
+
+## 일시정지 메뉴 (Esc)
+
+`Esc`를 누르면 `Time.timeScale = 0`으로 게임이 멈추고 "소리" / "게임 끝내기" 버튼이 있는 메뉴가 뜬다.
+다시 `Esc`를 누르면 메뉴가 닫히고 게임이 재개된다.
+
+- **소리**: 누르면 "배경음악 켜짐/꺼짐", "점프 사운드 켜짐/꺼짐" 서브 메뉴가 열린다. 각 버튼은 해당
+  `AudioSource.mute`를 토글하고 라벨 텍스트를 즉시 갱신한다.
+- **게임 끝내기**: 에디터에서는 Play 모드를 종료하고, 빌드에서는 `Application.Quit()`으로 게임을 종료한다.
+
+UGUI Button을 처음 쓰기 시작하면서 클릭을 받을 `EventSystem`이 필요해졌는데, 프로젝트가 새
+Input System 패키지를 쓰므로(레거시 Input은 예외를 던짐) 기본 `StandaloneInputModule` 대신
+`InputSystemUIInputModule`을 붙였다 (`CourseKit.CreateUI`가 "EventSystem"이 없을 때만 생성).
+
+**주의**: `Update()`는 `Time.timeScale = 0`이어도 계속 호출된다. 처음 구현했을 땐 일시정지 중에도
+`CameraFollow`가 좌클릭을 감지해 커서를 다시 잠그고 숨겨버려서, 메뉴 버튼을 눌러도 같은 프레임에
+클릭 좌표가 화면 중앙으로 튀어 반응이 없는 것처럼 보이는 문제가 있었다. `PauseMenuUI.IsPaused`
+정적 플래그를 두고 `CameraFollow.Update()` 맨 앞에서 확인해, 메뉴가 열려있는 동안은 커서 잠금/카메라
+회전을 아예 건드리지 않도록 고쳤다.
 
 ## 씬 구성
 
@@ -128,6 +148,7 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 | `HeightUI.cs` | 현재 높이 실시간 표시 (좌측 상단) |
 | `FallCountUI.cs` | 낙사 후 리스폰된 횟수 실시간 표시 (우측 상단) |
 | `BackgroundMusicPlayer.cs` | 배경 음악 재생 (생성 즉시 Play() 호출 시 씹히는 문제 방지용) |
+| `PauseMenuUI.cs` | Esc 일시정지 메뉴 (소리 켜기/끄기, 게임 끝내기) |
 | `Obstacle.cs` | 장애물 마커 (넉백 힘 값 보유) |
 | `MovingObstacle.cs` | 두 지점을 왕복하는 장애물 이동 |
 | `VisualSwapTarget.cs` | Visual 자식 교체(모델 스왑)를 위한 공용 컴포넌트 |

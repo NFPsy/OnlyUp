@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace OnlyUp
@@ -373,15 +375,17 @@ namespace OnlyUp
         }
 
         /// <summary>
-        /// 배경 음악을 재생한다. 씬에 이미 "BGM" 오브젝트가 있으면(중복 생성 방지) 건드리지 않는다.
-        /// Resources/Audio에 클립이 없으면 조용히 아무것도 만들지 않는다.
+        /// 배경 음악을 재생한다. 씬에 이미 "BGM" 오브젝트가 있으면 그 AudioSource를 그대로 반환하고
+        /// (중복 생성 방지), Resources/Audio에 클립이 없으면 아무것도 만들지 않고 null을 반환한다.
+        /// 반환하는 AudioSource는 PauseMenuUI가 배경음악 켜기/끄기 토글에 사용한다.
         /// </summary>
-        public static void SetupBackgroundMusic()
+        public static AudioSource SetupBackgroundMusic()
         {
-            if (GameObject.Find("BGM") != null) return;
+            GameObject existing = GameObject.Find("BGM");
+            if (existing != null) return existing.GetComponent<AudioSource>();
 
             AudioClip clip = Resources.Load<AudioClip>("Audio/BGM_StarHopParade");
-            if (clip == null) return;
+            if (clip == null) return null;
 
             GameObject bgmGO = new GameObject("BGM");
             AudioSource source = bgmGO.AddComponent<AudioSource>();
@@ -393,6 +397,7 @@ namespace OnlyUp
             // (GameBootstrap.Awake)에서 곧바로 Play()를 호출하면 아직 컴포넌트 초기화가 끝나지
             // 않아 조용히 무시되는 경우가 있어서, 씬의 모든 Awake가 끝난 뒤로 재생을 미룬다.
             bgmGO.AddComponent<BackgroundMusicPlayer>();
+            return source;
         }
 
         /// <summary>
@@ -520,11 +525,20 @@ namespace OnlyUp
         }
 
         /// <summary>
-        /// 높이 표시 텍스트 + (숨겨진) 게임 클리어 패널을 담은 UI Canvas를 생성한다.
+        /// 높이 표시 텍스트 + (숨겨진) 게임 클리어 패널 + ESC 일시정지 메뉴를 담은 UI Canvas를 생성한다.
         /// TextMeshPro Essentials가 프로젝트에 없으므로 기본 UGUI Text를 사용한다.
         /// </summary>
-        public static GameClearUI CreateUI(Transform playerTransform, float startHeight)
+        public static GameClearUI CreateUI(Transform playerTransform, float startHeight, AudioSource bgmSource, PlayerController playerController)
         {
+            // Button의 클릭을 받으려면 EventSystem이 있어야 한다. 프로젝트가 새 Input System 패키지를
+            // 쓰므로(레거시 Input은 예외를 던짐) StandaloneInputModule 대신 InputSystemUIInputModule을 쓴다.
+            if (GameObject.Find("EventSystem") == null)
+            {
+                GameObject eventSystemGO = new GameObject("EventSystem");
+                eventSystemGO.AddComponent<EventSystem>();
+                eventSystemGO.AddComponent<InputSystemUIInputModule>();
+            }
+
             GameObject canvasGO = new GameObject("UICanvas");
             Canvas canvas = canvasGO.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -603,7 +617,95 @@ namespace OnlyUp
             GameClearUI clearUI = canvasGO.AddComponent<GameClearUI>();
             clearUI.panel = panelGO;
 
+            CreatePauseMenu(canvasGO.transform, builtinFont, bgmSource, playerController);
+
             return clearUI;
+        }
+
+        /// <summary>
+        /// ESC로 여닫는 일시정지 메뉴(소리/게임 끝내기 메인 바 + 배경음악·점프 사운드 서브 메뉴)를 만든다.
+        /// </summary>
+        private static void CreatePauseMenu(Transform canvasParent, Font font, AudioSource bgmSource, PlayerController playerController)
+        {
+            GameObject pausePanelGO = new GameObject("PausePanel");
+            pausePanelGO.transform.SetParent(canvasParent, false);
+            Image pauseBg = pausePanelGO.AddComponent<Image>();
+            pauseBg.color = new Color(0f, 0f, 0f, 0.7f);
+            RectTransform pauseBgRT = pauseBg.rectTransform;
+            pauseBgRT.anchorMin = Vector2.zero;
+            pauseBgRT.anchorMax = Vector2.one;
+            pauseBgRT.offsetMin = Vector2.zero;
+            pauseBgRT.offsetMax = Vector2.zero;
+
+            Button soundButton;
+            CreateMenuButton(pausePanelGO.transform, font, "소리", new Vector2(0f, 40f), out soundButton);
+
+            Button quitButton;
+            CreateMenuButton(pausePanelGO.transform, font, "게임 끝내기", new Vector2(0f, -30f), out quitButton);
+
+            GameObject soundPanelGO = new GameObject("SoundPanel");
+            soundPanelGO.transform.SetParent(pausePanelGO.transform, false);
+            RectTransform soundPanelRT = soundPanelGO.AddComponent<RectTransform>();
+            soundPanelRT.anchorMin = new Vector2(0.5f, 0.5f);
+            soundPanelRT.anchorMax = new Vector2(0.5f, 0.5f);
+            soundPanelRT.anchoredPosition = new Vector2(0f, -150f);
+            soundPanelRT.sizeDelta = new Vector2(320f, 120f);
+
+            Button bgmButton;
+            Text bgmToggleText = CreateMenuButton(soundPanelGO.transform, font, "배경음악: 켜짐", new Vector2(0f, 30f), out bgmButton);
+
+            Button jumpButton;
+            Text jumpToggleText = CreateMenuButton(soundPanelGO.transform, font, "점프 사운드: 켜짐", new Vector2(0f, -30f), out jumpButton);
+
+            soundPanelGO.SetActive(false);
+            pausePanelGO.SetActive(false);
+
+            PauseMenuUI pauseMenu = canvasParent.gameObject.AddComponent<PauseMenuUI>();
+            pauseMenu.pausePanel = pausePanelGO;
+            pauseMenu.soundPanel = soundPanelGO;
+            pauseMenu.bgmSource = bgmSource;
+            pauseMenu.playerController = playerController;
+            pauseMenu.bgmToggleText = bgmToggleText;
+            pauseMenu.jumpToggleText = jumpToggleText;
+
+            soundButton.onClick.AddListener(pauseMenu.ToggleSoundPanel);
+            quitButton.onClick.AddListener(pauseMenu.QuitGame);
+            bgmButton.onClick.AddListener(pauseMenu.ToggleBgm);
+            jumpButton.onClick.AddListener(pauseMenu.ToggleJumpSfx);
+        }
+
+        /// <summary>
+        /// 배경 이미지 + 클릭 가능한 Button + 가운데 정렬된 라벨 Text로 구성된 메뉴 버튼 하나를 만든다.
+        /// </summary>
+        private static Text CreateMenuButton(Transform parent, Font font, string label, Vector2 anchoredPosition, out Button button)
+        {
+            GameObject buttonGO = new GameObject(label + "Button");
+            buttonGO.transform.SetParent(parent, false);
+            Image bg = buttonGO.AddComponent<Image>();
+            bg.color = new Color(1f, 1f, 1f, 0.9f);
+            RectTransform rt = bg.rectTransform;
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = anchoredPosition;
+            rt.sizeDelta = new Vector2(300f, 50f);
+
+            button = buttonGO.AddComponent<Button>();
+
+            GameObject textGO = new GameObject("Text");
+            textGO.transform.SetParent(buttonGO.transform, false);
+            Text text = textGO.AddComponent<Text>();
+            text.font = font;
+            text.text = label;
+            text.fontSize = 24;
+            text.color = Color.black;
+            text.alignment = TextAnchor.MiddleCenter;
+            RectTransform textRT = text.rectTransform;
+            textRT.anchorMin = Vector2.zero;
+            textRT.anchorMax = Vector2.one;
+            textRT.offsetMin = Vector2.zero;
+            textRT.offsetMax = Vector2.zero;
+
+            return text;
         }
     }
 }

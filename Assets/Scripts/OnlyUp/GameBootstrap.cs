@@ -158,9 +158,9 @@ namespace OnlyUp
 
             CourseKit.SetupCameraFollow(player.transform);
             CourseKit.SetupHeightSky(Camera.main, player.transform, startPosition.y, goalPosition.y);
-            CourseKit.SetupBackgroundMusic();
+            AudioSource bgmSource = CourseKit.SetupBackgroundMusic();
 
-            GameClearUI clearUI = CourseKit.CreateUI(player.transform, startPosition.y);
+            GameClearUI clearUI = CourseKit.CreateUI(player.transform, startPosition.y, bgmSource, player.GetComponent<PlayerController>());
 
             CourseKit.ConfigureGoal(courseParent, goalPosition, goalPlatformSize, player.GetComponent<PlayerController>(), clearUI, nextStageSceneName);
         }
