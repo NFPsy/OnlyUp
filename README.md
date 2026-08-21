@@ -197,7 +197,8 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
   만든 바로 그 프레임(`GameBootstrap.Awake`)에서 곧바로 `AudioSource.Play()`를 호출하면 아직
   컴포넌트 초기화가 끝나지 않아 조용히 무시되는 경우가 있어서, 씬의 모든 Awake가 끝난 뒤(Start
   단계)로 재생을 미루기 위함이다.
-- `SFX_JumpChirp.wav`: 점프 효과음. `PlayerController`가 Space로 점프할 때마다 재생한다.
+- `SFX_JumpChirp.mp3`: 점프 효과음("boing" 튕기는 소리, 원본 `sfx-boing9.mp3`). `PlayerController`가
+  Space로 점프할 때마다 재생한다.
 
 ## 알려진 제한사항
 
