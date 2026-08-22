@@ -146,6 +146,7 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 | `Goal.cs` | 골 도달 감지 → 클리어 UI 표시 또는 다음 씬 전환 |
 | `GameClearUI.cs` | GAME CLEAR 패널 표시/숨김 |
 | `HeightUI.cs` | 현재 높이 실시간 표시 (좌측 상단) |
+| `PlayTimeUI.cs` | 플레이 시작부터 흐른 시간 실시간 표시 (좌측 상단, 높이 바로 아래) |
 | `FallCountUI.cs` | 낙사 후 리스폰된 횟수 실시간 표시 (우측 상단) |
 | `BackgroundMusicPlayer.cs` | 배경 음악 재생 (생성 즉시 Play() 호출 시 씹히는 문제 방지용) |
 | `PauseMenuUI.cs` | Esc 일시정지 메뉴 (소리 켜기/끄기, 게임 끝내기) |

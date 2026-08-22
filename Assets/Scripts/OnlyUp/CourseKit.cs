@@ -570,6 +570,23 @@ namespace OnlyUp
             heightUI.heightText = heightText;
             heightUI.startHeight = startHeight;
 
+            GameObject timeGO = new GameObject("TimeText");
+            timeGO.transform.SetParent(canvasGO.transform, false);
+            Text timeText = timeGO.AddComponent<Text>();
+            timeText.font = builtinFont;
+            timeText.fontSize = 36;
+            timeText.color = Color.white;
+            timeText.alignment = TextAnchor.UpperLeft;
+            RectTransform timeRT = timeText.rectTransform;
+            timeRT.anchorMin = new Vector2(0f, 1f);
+            timeRT.anchorMax = new Vector2(0f, 1f);
+            timeRT.pivot = new Vector2(0f, 1f);
+            timeRT.anchoredPosition = new Vector2(20f, -80f);
+            timeRT.sizeDelta = new Vector2(400f, 60f);
+
+            PlayTimeUI playTimeUI = canvasGO.AddComponent<PlayTimeUI>();
+            playTimeUI.timeText = timeText;
+
             GameObject fallCountGO = new GameObject("FallCountText");
             fallCountGO.transform.SetParent(canvasGO.transform, false);
             Text fallCountText = fallCountGO.AddComponent<Text>();
@@ -616,6 +633,7 @@ namespace OnlyUp
 
             GameClearUI clearUI = canvasGO.AddComponent<GameClearUI>();
             clearUI.panel = panelGO;
+            playTimeUI.clearUI = clearUI;
 
             CreatePauseMenu(canvasGO.transform, builtinFont, bgmSource, playerController);
 
