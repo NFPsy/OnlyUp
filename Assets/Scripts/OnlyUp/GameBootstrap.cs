@@ -265,7 +265,10 @@ namespace OnlyUp
                             // 작은 구간(하늘)에서는 발판 폭 대부분을 장애물이 차지해 착지할 공간이 아예
                             // 없어지는 경우가 있었다 (80m 이상 구간에서 발판 1.5유닛 vs 장애물 1유닛 →
                             // 8방향 전부 착지 불가능한 것을 실측으로 확인).
-                            float obstacleWidth = Mathf.Clamp(zone.platformSize.x * 0.3f, 0.35f, 1f);
+                            // 장애물 Visual이 큐브에서 둥근 3D 모델(구)로 바뀌면서 같은 박스 콜라이더라도
+                            // 시각적으로 더 작아 보여 체감 난이도가 낮아졌다는 피드백이 있어, 비율을
+                            // 0.3 -> 0.35로, 최대 크기를 1 -> 1.15로 살짝 올려 눈에 보이는 장애물을 키웠다.
+                            float obstacleWidth = Mathf.Clamp(zone.platformSize.x * 0.35f, 0.35f, 1.15f);
                             Vector3 obstacleSize = new Vector3(obstacleWidth, 1f, obstacleWidth);
 
                             if (obstacleIndex % zone.movingObstacleEveryNth == 0)

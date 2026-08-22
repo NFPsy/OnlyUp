@@ -307,8 +307,29 @@ namespace OnlyUp
         }
 
         /// <summary>
-        /// 발판 위에 고정된 장애물(빨간 큐브)을 놓는다. 점프로 넘거나 옆으로 피해야 하며,
-        /// 부딪히면 Obstacle 값에 따라 플레이어가 튕겨나간다.
+        /// Resources/Obstacles에 실제 3D 장애물 모델이 있으면 그 중 하나를 무작위로 골라 Visual을
+        /// 교체하고, 없으면(모델이 아직 없을 때) 기존처럼 단색 큐브로 남겨둔다.
+        /// 발판(CreatePlatform)과 달리 콜라이더는 손대지 않는다 — 장애물의 충돌 판정은 항상
+        /// 코드로 계산한 obstacleSize 박스 그대로 유지해야, 모델이 어떤 모양이든(둥근 구 등)
+        /// 장애물 크기에 비례한 착지 공간 계산(GameBootstrap의 가장자리 배치/레이캐스트)이 그대로 맞는다.
+        /// </summary>
+        private static void ApplyObstacleVisual(VisualSwapTarget visualSwap, PlatformColliderSync sync, GameObject fallbackCubeVisual, Color fallbackColor)
+        {
+            GameObject[] obstacleModels = Resources.LoadAll<GameObject>("Obstacles");
+            if (obstacleModels != null && obstacleModels.Length > 0)
+            {
+                GameObject chosen = obstacleModels[Random.Range(0, obstacleModels.Length)];
+                sync.visual = visualSwap.SwapVisual(chosen);
+            }
+            else
+            {
+                SetUniqueColor(fallbackCubeVisual.GetComponent<Renderer>(), fallbackColor);
+            }
+        }
+
+        /// <summary>
+        /// 발판 위에 고정된 장애물(기본값: 빨간 큐브, 모델이 있으면 무작위 3D 모델)을 놓는다.
+        /// 점프로 넘거나 옆으로 피해야 하며, 부딪히면 Obstacle 값에 따라 플레이어가 튕겨나간다.
         /// obstaclePosition은 발판 중심이 아니라 (필요시) 한쪽으로 치우친 실제 배치 위치를 받는다 —
         /// 발판이 작을 때 장애물을 정중앙에 두면 발판 전체를 거의 다 차지해서 착지할 곳이 없어지므로,
         /// 호출부(GameBootstrap)에서 가장자리 쪽으로 옮긴 위치를 넘겨 반대편에 착지 공간을 확보한다.
@@ -325,11 +346,12 @@ namespace OnlyUp
             VisualSwapTarget visualSwap = obstacle.AddComponent<VisualSwapTarget>();
             GameObject visual = CreatePrimitiveVisual(obstacle.transform, PrimitiveType.Cube, obstacleSize);
             visualSwap.visual = visual.transform;
-            SetUniqueColor(visual.GetComponent<Renderer>(), Color.red);
 
             PlatformColliderSync sync = obstacle.AddComponent<PlatformColliderSync>();
             sync.targetCollider = collider;
             sync.visual = visual.transform;
+
+            ApplyObstacleVisual(visualSwap, sync, visual, Color.red);
 
             Obstacle obstacleScript = obstacle.AddComponent<Obstacle>();
             obstacleScript.knockbackForce = knockbackForce;
@@ -337,8 +359,8 @@ namespace OnlyUp
         }
 
         /// <summary>
-        /// 지정한 두 지점 사이를 왕복하는 장애물(주황색 큐브)을 놓는다. 타이밍을 맞춰 지나가거나
-        /// 뛰어넘어야 하며, 부딪히면 정지 장애물보다 더 세게 튕겨나간다.
+        /// 지정한 두 지점 사이를 왕복하는 장애물(기본값: 주황색 큐브, 모델이 있으면 무작위 3D 모델)을 놓는다.
+        /// 타이밍을 맞춰 지나가거나 뛰어넘어야 하며, 부딪히면 정지 장애물보다 더 세게 튕겨나간다.
         /// </summary>
         public static void CreateMovingObstacle(Transform parent, Vector3 pointA, Vector3 pointB, Vector3 obstacleSize, float speed = 0.6f, float knockbackForce = 16f, float knockbackUpward = 7f)
         {
@@ -358,11 +380,12 @@ namespace OnlyUp
             VisualSwapTarget visualSwap = obstacle.AddComponent<VisualSwapTarget>();
             GameObject visual = CreatePrimitiveVisual(obstacle.transform, PrimitiveType.Cube, obstacleSize);
             visualSwap.visual = visual.transform;
-            SetUniqueColor(visual.GetComponent<Renderer>(), new Color(1f, 0.45f, 0f));
 
             PlatformColliderSync sync = obstacle.AddComponent<PlatformColliderSync>();
             sync.targetCollider = collider;
             sync.visual = visual.transform;
+
+            ApplyObstacleVisual(visualSwap, sync, visual, new Color(1f, 0.45f, 0f));
 
             Obstacle obstacleScript = obstacle.AddComponent<Obstacle>();
             obstacleScript.knockbackForce = knockbackForce;
