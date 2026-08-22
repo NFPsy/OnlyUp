@@ -14,19 +14,22 @@
 | Active Input Handling | **Input System Package (New)** — 레거시 `UnityEngine.Input`은 예외를 던지므로 사용 금지 |
 | 추가 패키지 | `com.unity.cloud.gltfast` (VARCO 3D에서 만든 GLB 모델을 텍스처 손실 없이 가져오기 위해 추가) |
 | UI | 기본 UGUI (`Text`, `Canvas`) — TextMeshPro Essentials 미설치 상태라 TMP 대신 사용 |
+| UI 폰트 | `Assets/Resources/Fonts/NanumGothic.ttf` (나눔고딕, SIL OFL 라이선스) — 기본 내장 폰트(`LegacyRuntime.ttf`)는 한글 글리프가 없어서 에디터/PC 빌드에서는 OS 폰트로 대체되어 안 보이지만 WebGL 빌드는 OS 폰트 대체가 없어 한글 UI(일시정지 메뉴 등)가 빈칸으로 보였다. `CourseKit.CreateUI()`가 이 폰트를 모든 UI 텍스트에 공통으로 사용해서 해결 |
 
 ## 조작법
 
 - **WASD**: 이동 (카메라가 보는 방향 기준)
 - **Space**: 점프
 - **마우스 좌클릭 후 드래그**: 카메라 각도 회전 (포인터 락, `Esc`로 해제)
-- **Esc**: 일시정지 메뉴 열기/닫기 (다시 누르면 재개)
+- **P**: 일시정지 메뉴 열기/닫기 (다시 누르면 재개)
 - 방향키/WASD는 카메라 각도에 전혀 영향을 주지 않음 — 카메라는 마우스로만 회전하는 궤도(orbit) 카메라
 
-## 일시정지 메뉴 (Esc)
+## 일시정지 메뉴 (P)
 
-`Esc`를 누르면 `Time.timeScale = 0`으로 게임이 멈추고 "소리" / "게임 끝내기" 버튼이 있는 메뉴가 뜬다.
-다시 `Esc`를 누르면 메뉴가 닫히고 게임이 재개된다.
+`P`를 누르면 `Time.timeScale = 0`으로 게임이 멈추고 "소리" / "게임 끝내기" 버튼이 있는 메뉴가 뜬다.
+다시 `P`를 누르면 메뉴가 닫히고 게임이 재개된다. (원래 `Esc`였는데, 브라우저의 Pointer Lock API는
+`Esc`를 누르면 게임 스크립트와 무관하게 항상 강제로 포인터 락을 해제하는 내장 동작이 있어서, WebGL에서
+일시정지 키로 쓰기에 안정적이지 않아 `P`로 바꿨다.)
 
 - **소리**: 누르면 "배경음악 켜짐/꺼짐", "점프 사운드 켜짐/꺼짐" 서브 메뉴가 열린다. 각 버튼은 해당
   `AudioSource.mute`를 토글하고 라벨 텍스트를 즉시 갱신한다.
@@ -151,7 +154,7 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 | `PlayTimeUI.cs` | 플레이 시작부터 흐른 시간 실시간 표시 (좌측 상단, 높이 바로 아래) |
 | `FallCountUI.cs` | 낙사 후 리스폰된 횟수 실시간 표시 (우측 상단) |
 | `BackgroundMusicPlayer.cs` | 배경 음악 재생 (생성 즉시 Play() 호출 시 씹히는 문제 방지용) |
-| `PauseMenuUI.cs` | Esc 일시정지 메뉴 (소리 켜기/끄기, 게임 끝내기) |
+| `PauseMenuUI.cs` | P 일시정지 메뉴 (소리 켜기/끄기, 게임 끝내기) |
 | `Obstacle.cs` | 장애물 마커 (넉백 힘 값 보유) |
 | `MovingObstacle.cs` | 두 지점을 왕복하는 장애물 이동 |
 | `VisualSwapTarget.cs` | Visual 자식 교체(모델 스왑)를 위한 공용 컴포넌트 |
@@ -219,4 +222,7 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 
 - Idle 애니메이션 전용 클립이 없어 모델의 기본 포즈(한쪽 다리를 살짝 든 액션 포즈)를 그대로 사용 중
 - 좌우 90도 방향전환 트리거는 "거의 멈춰있다가 100도 이상 급격히 방향을 바꿀 때"라는 휴리스틱으로 감지 (완벽하지 않을 수 있음)
-- WebGL 빌드에서의 실제 플레이 테스트는 아직 진행되지 않음 (에디터 Play 모드 기준으로만 검증됨)
+- itch.io(WebGL)에서 실제 플레이 테스트 완료. 업로드 zip은 반드시 `index.html`/`Build`/`TemplateData`가
+  zip 최상위에 바로 오도록, 그리고 하위 폴더에 대한 디렉터리 항목이 실제로 포함되도록 압축해야 한다 —
+  Windows `Compress-Archive`로 만든 zip은 디렉터리 항목 없이 파일 경로만 슬래시로 표기해서, itch.io
+  서버가 `Build`/`TemplateData` 폴더를 아예 못 만들고 그 안의 파일이 전부 404가 나는 문제가 있었다.

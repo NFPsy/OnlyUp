@@ -572,7 +572,15 @@ namespace OnlyUp
 
             canvasGO.AddComponent<GraphicRaycaster>();
 
-            Font builtinFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // 기본 내장 폰트(LegacyRuntime.ttf)는 한글 글리프가 없어서 "소리"/"게임 끝내기" 같은
+            // 한글 UI 텍스트가 WebGL 빌드에서 빈 칸으로 보이는 문제가 있었다(에디터에서는 OS 폰트로
+            // 대체 렌더링되어 문제가 드러나지 않음). 한글이 포함된 나눔고딕(SIL OFL 라이선스, 무료
+            // 재배포 가능)을 Resources/Fonts에 넣어 모든 UI 텍스트에 공통으로 사용한다.
+            Font builtinFont = Resources.Load<Font>("Fonts/NanumGothic");
+            if (builtinFont == null)
+            {
+                builtinFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            }
 
             GameObject heightGO = new GameObject("HeightText");
             heightGO.transform.SetParent(canvasGO.transform, false);
