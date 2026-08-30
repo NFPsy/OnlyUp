@@ -60,9 +60,9 @@ namespace OnlyUp
             {
                 name = "쓰레기장 (쉬움)",
                 platformCount = 15,
-                platformSize = new Vector3(3.2f, 1f, 3.2f),
-                verticalStep = 3.0f,
-                horizontalVariance = 3.2f,
+                platformSize = new Vector3(2.6f, 1f, 2.6f),
+                verticalStep = 3.6f,
+                horizontalVariance = 4.2f,
                 pattern = MovementPattern.Straight,
                 obstacleEveryNPlatforms = 5,
                 movingObstacleEveryNth = 2,
@@ -77,7 +77,7 @@ namespace OnlyUp
                 name = "저택 (보통)",
                 platformCount = 15,
                 platformSize = new Vector3(2.2f, 1f, 2.2f),
-                verticalStep = 3.4f,
+                verticalStep = 3.7f,
                 horizontalVariance = 4.2f,
                 pattern = MovementPattern.Zigzag,
                 obstacleEveryNPlatforms = 3,
@@ -93,7 +93,7 @@ namespace OnlyUp
                 name = "하늘 (어려움)",
                 platformCount = 15,
                 platformSize = new Vector3(1.5f, 1f, 1.5f),
-                verticalStep = 3.2f,
+                verticalStep = 3.6f,
                 horizontalVariance = 4.6f,
                 pattern = MovementPattern.Tight,
                 obstacleEveryNPlatforms = 2,
@@ -124,7 +124,7 @@ namespace OnlyUp
         public int traverseRunLength = 2;
 
         [Header("시작/도착 발판 설정")]
-        public Vector3 startPlatformSize = new Vector3(6f, 1f, 6f);
+        public Vector3 startPlatformSize = new Vector3(4.5f, 1f, 4.5f);
         public Vector3 goalPlatformSize = new Vector3(5f, 1f, 5f);
         public float fallDistance = 18f;
 
@@ -186,11 +186,46 @@ namespace OnlyUp
 #endif
         }
 
+        /// <summary>
+        /// 두 발판이 수평으로 얼마나 겹쳐도 되는지의 안전 비율. 캐릭터는 점프 정점이 발판 간격보다
+        /// 훨씬 높아서(점프 궤적 자체의 특성), 이전 발판에서 뛰어오를 때 아직 다음 발판의 가로 범위
+        /// 안에 있는 상태로 그 발판 밑면 높이까지 먼저 올라가버리면 머리가 낀다. 실측(캡슐 콜라이더로
+        /// 실제 점프 궤적을 시뮬레이션)해보니 0.75~0.85배로는 부족한 경우가 남아있어서, 두 발판이
+        /// 아예 수평으로 겹치지 않는 지점(반지름 합 * 1.0)보다 살짝 더 여유(1.05배)를 뒀다.
+        /// </summary>
+        private const float MinHorizontalOffsetRatio = 1.05f;
+
+        /// <summary>
+        /// 패턴 공식(사인/코사인)이 우연히 두 성분을 동시에 0 근처로 만들면(위상이 겹치는 지점)
+        /// 발판이 거의 바로 위/아래로 겹치게 배치되어 머리가 끼는 원인이 된다. 계산된 (dx,dz)의
+        /// 길이가 두 발판 크기 기준 안전 최소값보다 작으면, 방향은 그대로 두고 길이만 늘려서
+        /// 최소 수평 거리를 항상 보장한다 (완전히 0이면 인덱스 기반 대체 방향을 쓴다).
+        /// </summary>
+        private static Vector2 EnsureMinHorizontalOffset(float dx, float dz, float minMagnitude, int fallbackIndex)
+        {
+            float mag = Mathf.Sqrt(dx * dx + dz * dz);
+            if (mag < 0.01f)
+            {
+                float fallbackAngle = fallbackIndex * 2.4f; // 골든 앵글 근사값 — 연속 인덱스가 항상 다른 방향을 향하게 함
+                dx = Mathf.Cos(fallbackAngle);
+                dz = Mathf.Sin(fallbackAngle);
+                mag = 1f;
+            }
+            if (mag < minMagnitude)
+            {
+                float scale = minMagnitude / mag;
+                dx *= scale;
+                dz *= scale;
+            }
+            return new Vector2(dx, dz);
+        }
+
         private Vector3 BuildCourse()
         {
             CourseKit.CreatePlatform(courseParent, "StartPlatform", startPosition, startPlatformSize, isGoal: false);
 
             Vector3 prev = startPosition;
+            float prevPlatformSizeX = startPlatformSize.x; // 직전 발판의 가로 크기 (구간이 바뀌는 첫 발판에서만 실제로 다름)
             int globalIndex = 0;   // 구간이 바뀌어도 이어지는 전체 발판 번호 (Platform_01, 02...)
             int obstacleIndex = 0; // 장애물 배치 간격 판단도 구간을 넘어 계속 이어짐
             int traverseRemaining = 0;
@@ -213,6 +248,7 @@ namespace OnlyUp
                     }
 
                     bool isTraverse = traverseRemaining > 0;
+                    float minOffset = MinHorizontalOffsetRatio * (prevPlatformSizeX + zone.platformSize.x) * 0.5f;
                     Vector3 pos;
                     if (isTraverse)
                     {
@@ -222,7 +258,10 @@ namespace OnlyUp
                         // 작은 구간에서도 다음 발판이 바로 위(발판 폭 이내)에 겹쳐 캐릭터 머리가 끼는 일이 없게 하기 위함.
                         float dx = traverseDir * zone.horizontalVariance * 1.3f;
                         float dz = Mathf.Sin(globalIndex * 0.8f) * zone.horizontalVariance * 0.25f;
-                        pos = prev + new Vector3(dx, zone.verticalStep * 0.4f, dz);
+                        Vector2 offset = EnsureMinHorizontalOffset(dx, dz, minOffset, globalIndex);
+                        // 옆으로 도는 구간은 수직 상승도 기존(0.4배)보다 넉넉히(0.6배) 줘서, 자칫 발판들이
+                        // 가로로는 충분히 떨어져 있어도 진행 경로 중간에 다른 발판 밑을 스치는 경우의 여유를 늘린다.
+                        pos = prev + new Vector3(offset.x, zone.verticalStep * 0.6f, offset.y);
                         traverseRemaining--;
                     }
                     else
@@ -248,8 +287,10 @@ namespace OnlyUp
                                 dz = Mathf.Cos(globalIndex * 0.5f) * zone.horizontalVariance * 0.5f;
                                 break;
                         }
-                        pos = prev + new Vector3(dx, zone.verticalStep, dz);
+                        Vector2 offset = EnsureMinHorizontalOffset(dx, dz, minOffset, globalIndex);
+                        pos = prev + new Vector3(offset.x, zone.verticalStep, offset.y);
                     }
+                    prevPlatformSizeX = zone.platformSize.x;
 
                     if (!isVeryLast)
                     {

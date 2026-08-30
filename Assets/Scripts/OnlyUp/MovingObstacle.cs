@@ -19,8 +19,14 @@ namespace OnlyUp
 
         private void Update()
         {
+            // Time.deltaTime은 "바로 직전 프레임 이후 몇 초가 지났는지"를 나타낸다. 이걸 곱해두면
+            // 프레임이 빠른 컴퓨터든 느린 컴퓨터든 항상 같은 실제 속도로 progress가 증가한다.
             progress += Time.deltaTime * speed;
+            // Mathf.PingPong(값, 1)은 값을 0→1로 올렸다가 다시 1→0으로 내리기를 반복해서 돌려준다
+            // (숫자가 튕기며 왕복하는 느낌이라 "핑퐁"). 그래서 t는 계속 0과 1 사이를 왔다갔다한다.
             float t = Mathf.PingPong(progress, 1f);
+            // Vector3.Lerp(A, B, t)는 t=0이면 A 위치, t=1이면 B 위치, 그 사이면 두 위치 사이의 한 점을 반환한다.
+            // t가 위에서 0~1을 왕복하므로 결과적으로 장애물이 A와 B 사이를 계속 왕복하게 된다.
             transform.position = Vector3.Lerp(pointA, pointB, t);
         }
     }

@@ -24,18 +24,23 @@ namespace OnlyUp
 
         private Camera cachedCamera;
 
+        // Update()는 게임이 실행되는 동안 매 프레임(1초에 수십~수백 번) Unity가 자동으로 호출하는 함수다.
         private void Update()
         {
             if (player == null) return;
+            // GetComponent는 비용이 조금 드는 편이라, 처음 한 번만 찾아서 cachedCamera에 저장해두고 재사용한다.
             if (cachedCamera == null)
             {
                 cachedCamera = GetComponent<Camera>();
                 if (cachedCamera == null) return;
             }
 
+            // Mathf.InverseLerp(a, b, value)는 "value가 a~b 사이에서 몇 %(0~1) 지점인지"를 계산해준다.
+            // 예: startHeight=0, endHeight=100일 때 player 높이가 50이면 t=0.5가 나온다.
             float t = endHeight > startHeight
                 ? Mathf.InverseLerp(startHeight, endHeight, player.position.y)
                 : 0f;
+            // Color.Lerp(색A, 색B, t)는 t=0이면 색A, t=1이면 색B, 그 사이면 두 색을 섞어서 반환한다.
             Color current = Color.Lerp(groundColor, skyColor, t);
 
             cachedCamera.backgroundColor = current;

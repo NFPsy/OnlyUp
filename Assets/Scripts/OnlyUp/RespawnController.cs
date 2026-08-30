@@ -19,6 +19,8 @@ namespace OnlyUp
         private CharacterController controller;
         private PlayerController playerController;
 
+        // Awake()는 Unity가 오브젝트가 생성되자마자(Start()보다도 먼저) 한 번 호출해주는 함수다.
+        // 다른 컴포넌트를 참조로 미리 받아두는(캐싱) 작업은 보통 여기서 한다.
         private void Awake()
         {
             controller = GetComponent<CharacterController>();

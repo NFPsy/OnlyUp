@@ -10,9 +10,12 @@ namespace OnlyUp
     [RequireComponent(typeof(AudioSource))]
     public class BackgroundMusicPlayer : MonoBehaviour
     {
+        // Start()는 Unity가 이 오브젝트가 생성된 뒤 자동으로 한 번 호출해주는 함수다(Awake보다 늦게 실행됨).
         private void Start()
         {
+            // GetComponent<T>()는 같은 오브젝트에 붙어있는 다른 컴포넌트(여기서는 AudioSource)를 찾아오는 함수다.
             AudioSource source = GetComponent<AudioSource>();
+            // 재생할 클립이 실제로 있고, 아직 재생 중이 아닐 때만 Play()를 호출한다.
             if (source != null && source.clip != null && !source.isPlaying)
             {
                 source.Play();

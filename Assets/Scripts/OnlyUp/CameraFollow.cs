@@ -61,6 +61,9 @@ namespace OnlyUp
             }
         }
 
+        // LateUpdate()는 Unity가 그 프레임의 모든 Update()가 다 끝난 뒤에 한 번 더 호출해주는 함수다.
+        // 카메라는 플레이어가 그 프레임에 다 움직인 "최종 위치"를 보고 따라가야 자연스러우므로,
+        // 플레이어 이동을 처리하는 PlayerController.Update()보다 항상 나중에 실행되도록 LateUpdate를 쓴다.
         private void LateUpdate()
         {
             if (target == null) return;

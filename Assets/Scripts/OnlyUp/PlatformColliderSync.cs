@@ -23,7 +23,7 @@ namespace OnlyUp
         [Tooltip("true면 콜라이더 두께를 maxThickness로 제한하고 항상 Visual의 맨 윗면에 붙인다. " +
             "발판처럼 위쪽에 다음 발판까지의 점프 공간이 필요한 경우에만 켠다 (장애물 등 일반 충돌체는 끔).")]
         public bool capThickness = false;
-        public float maxThickness = 0.4f;
+        public float maxThickness = 0.3f;
 
         private void Update()
         {

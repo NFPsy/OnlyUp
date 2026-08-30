@@ -22,6 +22,9 @@ namespace OnlyUp
 
         private bool cleared = false;
 
+        // OnTriggerEnter는 Unity가 자동으로 호출해주는 함수로, 이 오브젝트의 콜라이더가
+        // "Is Trigger" 옵션이 켜져 있을 때, 다른 콜라이더가 그 안으로 들어오는 순간 한 번 호출된다.
+        // (막히지 않고 그냥 통과되는 콜라이더라서, 물리적으로 부딪히는 대신 "감지"만 하고 싶을 때 쓴다)
         private void OnTriggerEnter(Collider other)
         {
             if (cleared) return;

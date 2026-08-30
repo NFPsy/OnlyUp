@@ -18,6 +18,11 @@ namespace OnlyUp
         // 발판 간격이 더 넓어진 코스(GameBootstrap의 verticalStep=3.4, horizontalVariance=4.2)에
         // 맞춰, 대각선 최장 거리(약 5.9m)를 점프 궤적으로 여유 있게 커버할 수 있도록 소폭 상향
         public float moveSpeed = 7f;
+        // 점프 정점 높이. 발판이 수직으로 겹쳐 보이는(머리가 부딪히는) 문제는 jumpHeight를 낮춰도
+        // 거의 개선되지 않는다는 것을 실측(캡슐 콜라이더로 실제 점프 궤적 시뮬레이션)으로 확인했다 —
+        // 원인은 점프 속도가 아니라 발판끼리의 수평 겹침 자체였다(GameBootstrap의
+        // MinHorizontalOffsetRatio로 해결). jumpHeight를 낮추면 오히려 점프 사거리만 줄어들어
+        // 일부 넓은 점프(하늘 구간)가 아슬아슬하게 닿지 않게 되므로, 기존 값(5)을 그대로 유지한다.
         public float jumpHeight = 5f;
         public float gravity = -25f;
         public float rotateSpeed = 12f; // 이동 방향으로 몸을 돌리는 속도

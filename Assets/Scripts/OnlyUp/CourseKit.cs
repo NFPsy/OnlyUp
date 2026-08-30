@@ -195,7 +195,7 @@ namespace OnlyUp
         /// 발판 콜라이더 두께의 최댓값. BoxCollider capThickness와 같은 값을 써서, 어떤 방식으로
         /// 콜라이더를 만들든 다음 발판까지의 점프 공간(헤드룸)이 항상 똑같이 확보되게 한다.
         /// </summary>
-        private const float PlatformColliderMaxThickness = 0.4f;
+        private const float PlatformColliderMaxThickness = 0.3f;
 
         /// <summary>
         /// 실제 3D 모델(별/쿠션처럼 각지고 오목한 형태)의 위에서 내려다본 윤곽선(2D 볼록 껍질)을 뽑아서,
