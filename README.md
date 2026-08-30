@@ -10,7 +10,7 @@
 |---|---|
 | Unity 버전 | 6000.3.21f1 |
 | 렌더 파이프라인 | Universal Render Pipeline (URP) |
-| 플랫폼 | PC(에디터) 기준 개발, **WebGL 빌드 → itch.io 배포**가 최종 목표 |
+| 플랫폼 | PC(에디터) 기준 개발, **WebGL 빌드로 itch.io에 배포 완료** |
 | Active Input Handling | **Input System Package (New)** — 레거시 `UnityEngine.Input`은 예외를 던지므로 사용 금지 |
 | 추가 패키지 | `com.unity.cloud.gltfast` (VARCO 3D에서 만든 GLB 모델을 텍스처 손실 없이 가져오기 위해 추가) |
 | UI | 기본 UGUI (`Text`, `Canvas`) — TextMeshPro Essentials 미설치 상태라 TMP 대신 사용 |
@@ -106,7 +106,9 @@ Input System 패키지를 쓰므로(레거시 Input은 예외를 던짐) 기본 
 모든 게임 오브젝트는 두 부분으로 나뉩니다.
 
 - **부모(로직)**: Collider, Rigidbody, 기능 스크립트 — 항상 유지됨
-- **자식 `Visual`**: 실제 보이는 메시 (지금은 Cube/Capsule 프리미티브, 나중에 VARCO 3D 등으로 만든 실제 모델로 교체 예정)
+- **자식 `Visual`**: 실제 보이는 메시. 발판/장애물은 VARCO 3D로 만든 실제 모델을 쓰고(아래 "VARCO 3D 모델
+  파이프라인" 참고), 플레이어는 `Resources/PlayerModel` 캐릭터 모델을 쓴다. 해당 리소스가 없으면 각각
+  Cube/Capsule 프리미티브로 자동 대체된다.
 
 `VisualSwapTarget.SwapVisual()` 하나로 Visual만 교체하면 외형이 바뀌고, Collider/스크립트는 전혀 손댈 필요가 없습니다.
 발판/장애물의 Visual 크기·위치가 바뀌면 `PlatformColliderSync`가 부모의 BoxCollider를 자동으로 맞춰줍니다
@@ -225,9 +227,9 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 
 ## 확장 예정 (설계상 이미 고려됨)
 
-- **VARCO 3D 연동**: `VisualSwapTarget`을 통해 발판/플레이어/장애물의 Visual을 실제 생성 모델로 교체 가능하도록 준비되어 있음
 - **스테이지 재도입**: `Goal.nextSceneName`에 다음 씬 이름만 지정하면 언제든 다시 씬을 이어붙일 수 있음 (지금은 비워둬서 단일 스테이지)
-- **새 장애물/발판 종류**: `CourseKit`에 생성 함수를 추가하고 Bootstrap의 배치 로직에서 호출하면 됨
+- **새 장애물/발판 종류**: `CourseKit`에 생성 함수를 추가하고 Bootstrap의 배치 로직에서 호출하면 됨 (발판/장애물 모두
+  `VisualSwapTarget`을 통해 Visual만 교체하는 구조라, 새 VARCO 3D 모델을 추가하는 것도 같은 방식으로 확장하면 됨)
 
 ## 사운드
 
@@ -242,11 +244,14 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 - `SFX_JumpChirp.mp3`: 점프 효과음("boing" 튕기는 소리, 원본 `sfx-boing9.mp3`). `PlayerController`가
   Space로 점프할 때마다 재생한다.
 
+## itch.io(WebGL) 배포 시 주의사항
+
+실제 itch.io에 올려서 플레이 테스트까지 완료했다. 업로드 zip은 반드시 `index.html`/`Build`/`TemplateData`가
+zip 최상위에 바로 오도록, 그리고 하위 폴더에 대한 디렉터리 항목이 실제로 포함되도록 압축해야 한다 — Windows
+`Compress-Archive`로 만든 zip은 디렉터리 항목 없이 파일 경로만 슬래시로 표기해서, itch.io 서버가
+`Build`/`TemplateData` 폴더를 아예 못 만들고 그 안의 파일이 전부 404가 나는 문제가 있었다.
+
 ## 알려진 제한사항
 
 - Idle 애니메이션 전용 클립이 없어 모델의 기본 포즈(한쪽 다리를 살짝 든 액션 포즈)를 그대로 사용 중
 - 좌우 90도 방향전환 트리거는 "거의 멈춰있다가 100도 이상 급격히 방향을 바꿀 때"라는 휴리스틱으로 감지 (완벽하지 않을 수 있음)
-- itch.io(WebGL)에서 실제 플레이 테스트 완료. 업로드 zip은 반드시 `index.html`/`Build`/`TemplateData`가
-  zip 최상위에 바로 오도록, 그리고 하위 폴더에 대한 디렉터리 항목이 실제로 포함되도록 압축해야 한다 —
-  Windows `Compress-Archive`로 만든 zip은 디렉터리 항목 없이 파일 경로만 슬래시로 표기해서, itch.io
-  서버가 `Build`/`TemplateData` 폴더를 아예 못 만들고 그 안의 파일이 전부 404가 나는 문제가 있었다.
