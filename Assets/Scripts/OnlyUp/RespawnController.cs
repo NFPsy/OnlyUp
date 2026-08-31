@@ -37,10 +37,17 @@ namespace OnlyUp
         }
 
         /// <summary>
-        /// 체크포인트 시스템을 나중에 추가할 때 이 메서드로 리스폰 지점을 갱신하면 된다.
+        /// 체크포인트를 밟았을 때 리스폰 지점을 갱신한다.
+        ///
+        /// 리스폰 지점은 "지금까지 밟은 것 중 가장 높은 체크포인트"여야 한다. 무조건 덮어쓰면,
+        /// 예를 들어 150m 체크포인트를 밟은 뒤 낙사해서 아주 오래(낙사 판정 높이까지) 떨어지는
+        /// 동안 우연히 50m나 100m 체크포인트의 트리거 범위를 다시 스쳐 지나가면 리스폰 지점이
+        /// 도로 낮아지는 문제가 있었다(실제로 발생 확인됨). 그래서 새 지점이 지금 지점보다
+        /// 더 낮으면(y가 작으면) 무시하고, 항상 가장 높이 도달했던 지점만 유지한다.
         /// </summary>
         public void SetSpawnPoint(Vector3 newSpawnPosition)
         {
+            if (newSpawnPosition.y <= spawnPosition.y) return;
             spawnPosition = newSpawnPosition;
         }
 
