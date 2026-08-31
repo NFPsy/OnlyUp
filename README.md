@@ -26,14 +26,21 @@
 
 ## 일시정지 메뉴 (P)
 
-`P`를 누르면 `Time.timeScale = 0`으로 게임이 멈추고 "소리" / "게임 끝내기" 버튼이 있는 메뉴가 뜬다.
+`P`를 누르면 `Time.timeScale = 0`으로 게임이 멈추고 "감도 설정" / "소리" / "게임 끝내기" 버튼이 있는 메뉴가 뜬다.
 다시 `P`를 누르면 메뉴가 닫히고 게임이 재개된다. (원래 `Esc`였는데, 브라우저의 Pointer Lock API는
 `Esc`를 누르면 게임 스크립트와 무관하게 항상 강제로 포인터 락을 해제하는 내장 동작이 있어서, WebGL에서
 일시정지 키로 쓰기에 안정적이지 않아 `P`로 바꿨다.)
 
+- **감도 설정**: 누르면 마우스 감도(`CameraFollow.mouseSensitivity`, 기본 0.15) 슬라이더가 열린다.
+  드래그하면 `Slider.onValueChanged`가 매 프레임 값을 넘겨줘서 즉시 카메라 회전 속도에 반영되고,
+  라벨 텍스트("마우스 감도: 0.35")도 같이 갱신된다. 범위는 0.02(느림)~0.5(빠름)로, 기본 UGUI Slider
+  프리팹과 동일한 구조(Background + Fill Area/Fill + Handle Slide Area/Handle)를 코드로 그대로
+  만들어서 Slider 컴포넌트가 값에 맞춰 Fill 너비/Handle 위치를 알아서 갱신하게 했다.
 - **소리**: 누르면 "배경음악 켜짐/꺼짐", "점프 사운드 켜짐/꺼짐" 서브 메뉴가 열린다. 각 버튼은 해당
   `AudioSource.mute`를 토글하고 라벨 텍스트를 즉시 갱신한다.
 - **게임 끝내기**: 에디터에서는 Play 모드를 종료하고, 빌드에서는 `Application.Quit()`으로 게임을 종료한다.
+
+감도/소리 서브 메뉴는 하나를 열면 다른 하나가 자동으로 닫힌다(동시에 겹쳐 보이는 것을 방지).
 
 UGUI Button을 처음 쓰기 시작하면서 클릭을 받을 `EventSystem`이 필요해졌는데, 프로젝트가 새
 Input System 패키지를 쓰므로(레거시 Input은 예외를 던짐) 기본 `StandaloneInputModule` 대신
@@ -222,7 +229,7 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 | `PlayTimeUI.cs` | 플레이 시작부터 흐른 시간 실시간 표시 (좌측 상단, 높이 바로 아래) |
 | `FallCountUI.cs` | 낙사 후 리스폰된 횟수 실시간 표시 (우측 상단) |
 | `BackgroundMusicPlayer.cs` | 배경 음악 재생 (생성 즉시 Play() 호출 시 씹히는 문제 방지용) |
-| `PauseMenuUI.cs` | P 일시정지 메뉴 (소리 켜기/끄기, 게임 끝내기) |
+| `PauseMenuUI.cs` | P 일시정지 메뉴 (마우스 감도 조절, 소리 켜기/끄기, 게임 끝내기) |
 | `Obstacle.cs` | 장애물 마커 (넉백 힘 값 보유) |
 | `MovingObstacle.cs` | 두 지점을 왕복하는 장애물 이동 (가로 왕복 / 위아래 왕복 둘 다 이걸로 처리) |
 | `RotatingObstacle.cs` | 발판 중심 주위를 계속 공전하는 장애물 |

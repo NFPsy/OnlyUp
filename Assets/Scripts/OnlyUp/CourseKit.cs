@@ -754,7 +754,8 @@ namespace OnlyUp
         }
 
         /// <summary>
-        /// ESC로 여닫는 일시정지 메뉴(소리/게임 끝내기 메인 바 + 배경음악·점프 사운드 서브 메뉴)를 만든다.
+        /// P로 여닫는 일시정지 메뉴(감도 설정/소리/게임 끝내기 메인 바 + 마우스 감도 슬라이더·
+        /// 배경음악·점프 사운드 서브 메뉴)를 만든다.
         /// </summary>
         private static void CreatePauseMenu(Transform canvasParent, Font font, AudioSource bgmSource, PlayerController playerController)
         {
@@ -768,11 +769,44 @@ namespace OnlyUp
             pauseBgRT.offsetMin = Vector2.zero;
             pauseBgRT.offsetMax = Vector2.zero;
 
+            // 메인 바 버튼 3개를 위에서부터 "감도 설정" -> "소리" -> "게임 끝내기" 순서로 60씩 띄워서 배치한다.
+            Button sensitivityButton;
+            CreateMenuButton(pausePanelGO.transform, font, "감도 설정", new Vector2(0f, 100f), out sensitivityButton);
+
             Button soundButton;
             CreateMenuButton(pausePanelGO.transform, font, "소리", new Vector2(0f, 40f), out soundButton);
 
             Button quitButton;
-            CreateMenuButton(pausePanelGO.transform, font, "게임 끝내기", new Vector2(0f, -30f), out quitButton);
+            CreateMenuButton(pausePanelGO.transform, font, "게임 끝내기", new Vector2(0f, -20f), out quitButton);
+
+            // 마우스가 카메라를 얼마나 빨리 돌릴지(CameraFollow.mouseSensitivity)를 조절하는 서브 메뉴.
+            GameObject sensitivityPanelGO = new GameObject("SensitivityPanel");
+            sensitivityPanelGO.transform.SetParent(pausePanelGO.transform, false);
+            RectTransform sensitivityPanelRT = sensitivityPanelGO.AddComponent<RectTransform>();
+            sensitivityPanelRT.anchorMin = new Vector2(0.5f, 0.5f);
+            sensitivityPanelRT.anchorMax = new Vector2(0.5f, 0.5f);
+            sensitivityPanelRT.anchoredPosition = new Vector2(0f, -150f);
+            sensitivityPanelRT.sizeDelta = new Vector2(320f, 110f);
+
+            CameraFollow cameraFollow = Camera.main != null ? Camera.main.GetComponent<CameraFollow>() : null;
+            float currentSensitivity = cameraFollow != null ? cameraFollow.mouseSensitivity : 0.15f;
+
+            GameObject sensitivityTextGO = new GameObject("Text");
+            sensitivityTextGO.transform.SetParent(sensitivityPanelGO.transform, false);
+            Text sensitivityValueText = sensitivityTextGO.AddComponent<Text>();
+            sensitivityValueText.font = font;
+            sensitivityValueText.fontSize = 22;
+            sensitivityValueText.color = Color.white;
+            sensitivityValueText.alignment = TextAnchor.MiddleCenter;
+            sensitivityValueText.text = "마우스 감도: " + currentSensitivity.ToString("F2");
+            RectTransform sensitivityTextRT = sensitivityValueText.rectTransform;
+            sensitivityTextRT.anchorMin = new Vector2(0.5f, 0.5f);
+            sensitivityTextRT.anchorMax = new Vector2(0.5f, 0.5f);
+            sensitivityTextRT.anchoredPosition = new Vector2(0f, 25f);
+            sensitivityTextRT.sizeDelta = new Vector2(300f, 40f);
+
+            // 슬라이더 범위는 기본값(0.15)의 절반 아래(느리게)부터 3배 이상(빠르게)까지 넉넉히 잡았다.
+            Slider sensitivitySlider = CreateSlider(sensitivityPanelGO.transform, new Vector2(0f, -20f), 0.02f, 0.5f, currentSensitivity);
 
             GameObject soundPanelGO = new GameObject("SoundPanel");
             soundPanelGO.transform.SetParent(pausePanelGO.transform, false);
@@ -788,21 +822,100 @@ namespace OnlyUp
             Button jumpButton;
             Text jumpToggleText = CreateMenuButton(soundPanelGO.transform, font, "점프 사운드: 켜짐", new Vector2(0f, -30f), out jumpButton);
 
+            sensitivityPanelGO.SetActive(false);
             soundPanelGO.SetActive(false);
             pausePanelGO.SetActive(false);
 
             PauseMenuUI pauseMenu = canvasParent.gameObject.AddComponent<PauseMenuUI>();
             pauseMenu.pausePanel = pausePanelGO;
             pauseMenu.soundPanel = soundPanelGO;
+            pauseMenu.sensitivityPanel = sensitivityPanelGO;
             pauseMenu.bgmSource = bgmSource;
             pauseMenu.playerController = playerController;
+            pauseMenu.cameraFollow = cameraFollow;
             pauseMenu.bgmToggleText = bgmToggleText;
             pauseMenu.jumpToggleText = jumpToggleText;
+            pauseMenu.sensitivityValueText = sensitivityValueText;
 
+            sensitivityButton.onClick.AddListener(pauseMenu.ToggleSensitivityPanel);
             soundButton.onClick.AddListener(pauseMenu.ToggleSoundPanel);
             quitButton.onClick.AddListener(pauseMenu.QuitGame);
             bgmButton.onClick.AddListener(pauseMenu.ToggleBgm);
             jumpButton.onClick.AddListener(pauseMenu.ToggleJumpSfx);
+            sensitivitySlider.onValueChanged.AddListener(pauseMenu.OnSensitivityChanged);
+        }
+
+        /// <summary>
+        /// 가로로 드래그해서 값을 조절하는 기본 UGUI Slider를 코드로 만든다.
+        /// Unity 기본 Slider 프리팹과 같은 구조(Background + Fill Area/Fill + Handle Slide Area/Handle)를
+        /// 그대로 따라야, Slider 컴포넌트가 값이 바뀔 때 Fill의 너비/Handle의 위치를 자동으로 갱신해준다.
+        /// </summary>
+        private static Slider CreateSlider(Transform parent, Vector2 anchoredPosition, float minValue, float maxValue, float startValue)
+        {
+            GameObject sliderGO = new GameObject("Slider");
+            sliderGO.transform.SetParent(parent, false);
+            RectTransform sliderRT = sliderGO.AddComponent<RectTransform>();
+            sliderRT.anchorMin = new Vector2(0.5f, 0.5f);
+            sliderRT.anchorMax = new Vector2(0.5f, 0.5f);
+            sliderRT.anchoredPosition = anchoredPosition;
+            sliderRT.sizeDelta = new Vector2(260f, 20f);
+
+            Slider slider = sliderGO.AddComponent<Slider>();
+
+            GameObject bgGO = new GameObject("Background");
+            bgGO.transform.SetParent(sliderGO.transform, false);
+            Image bgImage = bgGO.AddComponent<Image>();
+            bgImage.color = new Color(1f, 1f, 1f, 0.3f);
+            RectTransform bgRT = bgImage.rectTransform;
+            bgRT.anchorMin = Vector2.zero;
+            bgRT.anchorMax = Vector2.one;
+            bgRT.offsetMin = Vector2.zero;
+            bgRT.offsetMax = Vector2.zero;
+
+            // Fill Area 안의 Fill 이미지 너비를, Slider 컴포넌트가 현재 값(0~1 비율)에 맞춰 매 프레임 자동으로 조절한다.
+            GameObject fillAreaGO = new GameObject("Fill Area");
+            fillAreaGO.transform.SetParent(sliderGO.transform, false);
+            RectTransform fillAreaRT = fillAreaGO.AddComponent<RectTransform>();
+            fillAreaRT.anchorMin = new Vector2(0f, 0.25f);
+            fillAreaRT.anchorMax = new Vector2(1f, 0.75f);
+            fillAreaRT.offsetMin = new Vector2(5f, 0f);
+            fillAreaRT.offsetMax = new Vector2(-5f, 0f);
+
+            GameObject fillGO = new GameObject("Fill");
+            fillGO.transform.SetParent(fillAreaGO.transform, false);
+            Image fillImage = fillGO.AddComponent<Image>();
+            fillImage.color = new Color(0.3f, 0.6f, 1f, 1f);
+            RectTransform fillRT = fillImage.rectTransform;
+            fillRT.anchorMin = Vector2.zero;
+            fillRT.anchorMax = Vector2.one;
+            fillRT.offsetMin = Vector2.zero;
+            fillRT.offsetMax = Vector2.zero;
+
+            // 손잡이(Handle): 드래그해서 잡는 동그란(사각) 부분.
+            GameObject handleAreaGO = new GameObject("Handle Slide Area");
+            handleAreaGO.transform.SetParent(sliderGO.transform, false);
+            RectTransform handleAreaRT = handleAreaGO.AddComponent<RectTransform>();
+            handleAreaRT.anchorMin = Vector2.zero;
+            handleAreaRT.anchorMax = Vector2.one;
+            handleAreaRT.offsetMin = new Vector2(10f, 0f);
+            handleAreaRT.offsetMax = new Vector2(-10f, 0f);
+
+            GameObject handleGO = new GameObject("Handle");
+            handleGO.transform.SetParent(handleAreaGO.transform, false);
+            Image handleImage = handleGO.AddComponent<Image>();
+            handleImage.color = Color.white;
+            RectTransform handleRT = handleImage.rectTransform;
+            handleRT.sizeDelta = new Vector2(18f, 18f);
+
+            slider.fillRect = fillRT;
+            slider.handleRect = handleRT;
+            slider.targetGraphic = handleImage;
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = minValue;
+            slider.maxValue = maxValue;
+            slider.value = startValue;
+
+            return slider;
         }
 
         /// <summary>

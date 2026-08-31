@@ -5,9 +5,10 @@ using UnityEngine.UI;
 namespace OnlyUp
 {
     /// <summary>
-    /// P로 여닫는 일시정지 메뉴. "소리"와 "게임 끝내기" 버튼이 있는 메인 바에서
-    /// 소리를 누르면 배경음악/점프 사운드 켜기·끄기 서브 메뉴가 나타난다.
-    /// P를 누를 때마다 열림/닫힘이 토글되고, 열려있는 동안은 Time.timeScale=0으로 멈춘다.
+    /// P로 여닫는 일시정지 메뉴. "감도 설정"/"소리"/"게임 끝내기" 버튼이 있는 메인 바에서
+    /// 감도 설정을 누르면 마우스 감도 슬라이더가, 소리를 누르면 배경음악/점프 사운드 켜기·끄기
+    /// 서브 메뉴가 나타난다. P를 누를 때마다 열림/닫힘이 토글되고, 열려있는 동안은
+    /// Time.timeScale=0으로 멈춘다.
     /// (원래 Esc였는데, WebGL 브라우저에서 Esc가 포인터 락 해제 등 브라우저 자체 동작과 겹쳐
     /// 게임 쪽 입력으로 안정적으로 전달되지 않는 경우가 있어 P로 바꿨다.)
     /// </summary>
@@ -15,10 +16,13 @@ namespace OnlyUp
     {
         public GameObject pausePanel;
         public GameObject soundPanel;
+        public GameObject sensitivityPanel;
         public AudioSource bgmSource;
         public PlayerController playerController;
+        public CameraFollow cameraFollow;
         public Text bgmToggleText;
         public Text jumpToggleText;
+        public Text sensitivityValueText;
 
         /// <summary>
         /// 다른 스크립트(CameraFollow)가 "지금 일시정지 메뉴가 열려있는지"를 확인할 수 있게 하는 값.
@@ -47,9 +51,11 @@ namespace OnlyUp
             Time.timeScale = paused ? 0f : 1f;
 
             if (pausePanel != null) pausePanel.SetActive(paused);
-            if (!paused && soundPanel != null)
+            if (!paused)
             {
-                soundPanel.SetActive(false); // 다음에 열 때는 항상 메인 메뉴부터 보이게 초기화
+                // 다음에 열 때는 항상 메인 메뉴부터 보이게, 서브 메뉴는 전부 닫아둔 채로 초기화한다.
+                if (soundPanel != null) soundPanel.SetActive(false);
+                if (sensitivityPanel != null) sensitivityPanel.SetActive(false);
             }
 
             // 일시정지 중에는 항상 커서를 보이게 해서 메뉴 버튼을 클릭할 수 있게 한다.
@@ -60,7 +66,26 @@ namespace OnlyUp
 
         public void ToggleSoundPanel()
         {
-            if (soundPanel != null) soundPanel.SetActive(!soundPanel.activeSelf);
+            if (soundPanel == null) return;
+            bool willOpen = !soundPanel.activeSelf;
+            soundPanel.SetActive(willOpen);
+            // 서브 메뉴 두 개가 동시에 겹쳐 보이지 않도록, 하나를 열면 다른 하나는 닫는다.
+            if (willOpen && sensitivityPanel != null) sensitivityPanel.SetActive(false);
+        }
+
+        public void ToggleSensitivityPanel()
+        {
+            if (sensitivityPanel == null) return;
+            bool willOpen = !sensitivityPanel.activeSelf;
+            sensitivityPanel.SetActive(willOpen);
+            if (willOpen && soundPanel != null) soundPanel.SetActive(false);
+        }
+
+        // Slider의 onValueChanged가 값이 바뀔 때마다(드래그 도중 매 프레임) 이 함수를 호출해준다.
+        public void OnSensitivityChanged(float value)
+        {
+            if (cameraFollow != null) cameraFollow.mouseSensitivity = value;
+            if (sensitivityValueText != null) sensitivityValueText.text = "마우스 감도: " + value.ToString("F2");
         }
 
         public void ToggleBgm()
