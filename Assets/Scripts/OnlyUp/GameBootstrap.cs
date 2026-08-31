@@ -13,8 +13,11 @@ namespace OnlyUp
     /// 좁아지고 간격이 빡빡해짐), 계속 위로만 가지 않고 가끔 옆으로 도는 구간이 섞여 있으며,
     /// 높이가 오를수록 하늘 색이 지상의 파스텔톤에서 정상의 짙은 색으로 서서히 바뀐다.
     ///
-    /// 중간에 씬을 나누지 않는 하나의 긴 등반이므로 체크포인트도 없다 — 떨어지면 항상 맨 처음으로
-    /// 돌아간다(Only Up!의 가혹한 낙사 페널티와 동일한 컨셉). Goal에 도달하면 GAME CLEAR UI를 표시한다.
+    /// 중간에 씬을 나누지 않는 하나의 긴 등반이다. 원래는 체크포인트가 전혀 없어서 낙사하면 항상
+    /// 맨 처음으로 돌아가는 구조였지만(Only Up!의 가혹한 낙사 페널티와 동일한 컨셉), 코스가 60개
+    /// 발판으로 길어지면서 그 페널티가 지나치게 가혹해졌다. 그래서 50/100/150m 지점에 초록색
+    /// 체크포인트 발판(<see cref="Checkpoint"/>)을 두어, 낙사해도 마지막으로 밟은 체크포인트부터
+    /// 다시 시작하게 했다. Goal에 도달하면 GAME CLEAR UI를 표시한다.
     /// </summary>
     public class GameBootstrap : MonoBehaviour
     {
@@ -175,6 +178,10 @@ namespace OnlyUp
         [Tooltip("한 번 삽입될 때 몇 개의 발판이 연달아 옆으로 도는 구간인지")]
         public int traverseRunLength = 2;
 
+        [Header("체크포인트(세이브 포인트) 설정")]
+        [Tooltip("이 높이들을 처음 넘는 발판이 초록색 체크포인트로 바뀐다. 낙사해도 여기서부터 다시 시작한다")]
+        public float[] checkpointHeights = new float[] { 50f, 100f, 150f };
+
         [Header("무너지는 발판 설정")]
         [Tooltip("밟은 뒤 무너지기까지의 시간(초). 이 동안 발판이 흔들려 경고를 준다")]
         public float crumbleDelay = 0.9f;
@@ -288,6 +295,7 @@ namespace OnlyUp
             int obstacleIndex = 0; // 장애물 배치 간격 판단도 구간을 넘어 계속 이어짐
             int traverseRemaining = 0;
             int traverseDir = 1;
+            int nextCheckpointIndex = 0; // checkpointHeights 배열에서 다음에 배치할 체크포인트의 인덱스
 
             for (int zoneIdx = 0; zoneIdx < zones.Length; zoneIdx++)
             {
@@ -363,10 +371,29 @@ namespace OnlyUp
 
                     if (!isVeryLast)
                     {
-                        string label = isTraverse ? $"Platform_{globalIndex:00}_Traverse" : $"Platform_{globalIndex:00}";
-                        GameObject platformGO = CourseKit.CreatePlatform(courseParent, label, pos, zone.platformSize, isGoal: false);
+                        // 옆으로 도는 구간은 배치가 특수해서 체크포인트로 쓰지 않고, 다음 일반 발판으로
+                        // 넘어갈 때 처리한다. checkpointHeights를 순서대로 하나씩만 소비하므로
+                        // (nextCheckpointIndex를 여기서 증가시킴) 한 발판이 여러 체크포인트 높이를
+                        // 한꺼번에 건너뛰어도 하나만 배치되고 다음 높이는 그다음 발판에서 처리된다.
+                        bool isCheckpoint = !isTraverse
+                            && nextCheckpointIndex < checkpointHeights.Length
+                            && pos.y >= checkpointHeights[nextCheckpointIndex];
+                        if (isCheckpoint) nextCheckpointIndex++;
 
-                        // 밟으면 무너지는 발판: 오래 서서 다음 점프를 고민할 수 없게 만들어 압박을 준다.
+                        string label = isTraverse ? $"Platform_{globalIndex:00}_Traverse"
+                            : isCheckpoint ? $"Checkpoint_{globalIndex:00}"
+                            : $"Platform_{globalIndex:00}";
+                        GameObject platformGO = CourseKit.CreatePlatform(courseParent, label, pos, zone.platformSize, isGoal: false, isCheckpoint: isCheckpoint);
+
+                        // 체크포인트는 Goal처럼 항상 단순한 발판으로 두고 장애물/무너짐을 섞지 않는다 —
+                        // "안전하게 진행 상황을 저장하는 지점"이라는 역할에 집중시키기 위함이다.
+                        if (isCheckpoint)
+                        {
+                            prev = pos;
+                            continue;
+                        }
+
+                        // 밟으면 무너지는 발판: 오래 서서 다음 점프를 고민할 수 없다는 압박을 준다.
                         // 옆으로 도는 구간은 이동 자체가 이미 도전 요소라 제외한다.
                         if (!isTraverse && zone.crumblingEveryNPlatforms > 0 && i % zone.crumblingEveryNPlatforms == 0)
                         {

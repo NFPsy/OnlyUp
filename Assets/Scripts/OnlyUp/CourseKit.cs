@@ -123,9 +123,12 @@ namespace OnlyUp
         /// <summary>
         /// Cube 프리미티브로 발판(또는 바위 덩어리) 하나를 생성한다.
         /// isGoal이면 Goal 스크립트와 트리거를 추가한다 (player/clearUI/nextSceneName은 호출부에서 설정).
-        /// rotationY를 주면 발판을 y축으로 회전시켜 좀 더 자연스러운 바위처럼 배치할 수 있다.
+        /// isCheckpoint면 Checkpoint 스크립트와 트리거를 추가한다 (세이브 포인트, 밟으면 리스폰 지점이 갱신됨).
+        /// isGoal과 isCheckpoint는 둘 다 "실제 3D 모델로 바꾸지 않고 색으로 구분되는 특수 발판"이라는
+        /// 점이 같아서 같은 else-if 구조로 처리한다. rotationY를 주면 발판을 y축으로 회전시켜
+        /// 좀 더 자연스러운 바위처럼 배치할 수 있다.
         /// </summary>
-        public static GameObject CreatePlatform(Transform parent, string name, Vector3 position, Vector3 size, bool isGoal, float rotationY = 0f)
+        public static GameObject CreatePlatform(Transform parent, string name, Vector3 position, Vector3 size, bool isGoal, float rotationY = 0f, bool isCheckpoint = false)
         {
             GameObject platform = new GameObject(name);
             platform.transform.SetParent(parent, false);
@@ -161,6 +164,22 @@ namespace OnlyUp
                 trigger.size = new Vector3(size.x * 0.8f, size.y * 2f, size.z * 0.8f);
 
                 platform.AddComponent<Goal>();
+            }
+            else if (isCheckpoint)
+            {
+                // 체크포인트는 초록색으로 표시해 Goal(노랑)과 구분되는 "특수 발판"임을 알려준다
+                SetUniqueColor(visual.GetComponent<Renderer>(), Color.green);
+
+                // Goal과 동일한 방식(발판 위 공간에 트리거)으로 밟힘을 감지한다
+                BoxCollider trigger = platform.AddComponent<BoxCollider>();
+                trigger.isTrigger = true;
+                trigger.center = new Vector3(0f, size.y, 0f);
+                trigger.size = new Vector3(size.x * 0.8f, size.y * 2f, size.z * 0.8f);
+
+                Checkpoint checkpoint = platform.AddComponent<Checkpoint>();
+                // CreatePlayer가 시작 지점 스폰 위치를 계산할 때 쓰는 것과 같은 공식(발판 위 1.05)을 써서
+                // 리스폰됐을 때 발판 바로 위, 딱 서 있는 높이에 착지하게 한다.
+                checkpoint.respawnPosition = position + new Vector3(0f, size.y * 0.5f + 1.05f, 0f);
             }
             else
             {

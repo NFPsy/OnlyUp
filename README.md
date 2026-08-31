@@ -1,7 +1,7 @@
 # OnlyUp
 
 "Only Up!" / *Getting Over It* / *Chained Together* 스타일의 3D 수직 등반 플랫포머입니다.
-플레이어는 발판을 밟고 점프하며 계속 위로 올라가고, 떨어지면 시작 지점에서 다시 시작합니다.
+플레이어는 발판을 밟고 점프하며 계속 위로 올라가고, 떨어지면 마지막으로 밟은 체크포인트(없으면 시작 지점)에서 다시 시작합니다.
 씬에는 로직 오브젝트(Camera, Light, `GameBootstrap`)만 두고, 발판 코스·플레이어·UI는 전부 코드로 생성합니다.
 
 ## 개발 환경
@@ -53,10 +53,24 @@ Input System 패키지를 쓰므로(레거시 Input은 예외를 던짐) 기본 
 | `Assets/Scenes/OnlyUp.unity` | **유일한 스테이지.** 시작부터 정상까지 끊기지 않는 단일 등반 코스 (`GameBootstrap`, 발판 60개) |
 
 원래 씬을 둘로 나눠 중간에 전환하는 구조였지만, 실제 *Only Up!*처럼 "떨어지면 처음부터"라는 긴장감을 살리기 위해
-씬 전환 없는 **하나의 긴 코스**로 통합했습니다. 체크포인트가 없어서 낙사하면 항상 맨 처음으로 되돌아갑니다.
+씬 전환 없는 **하나의 긴 코스**로 통합했습니다.
 (`Goal.nextSceneName`이 비어있으면 최종 스테이지로 동작 — 확장하려면 이 필드에 다음 씬 이름을 넣으면 됨)
 
-### 맵 구조 — 실제 Only Up!과 비슷하게 반영한 3가지
+### 체크포인트(세이브 포인트)
+
+코스가 60개 발판(약 200m)까지 길어지면서, 체크포인트 없이 낙사할 때마다 항상 맨 처음으로 돌아가는 페널티가
+지나치게 가혹해졌다. 그래서 `GameBootstrap.checkpointHeights`(기본 `{50, 100, 150}`)에 지정한 높이를 처음
+넘는 발판을 초록색 `Checkpoint` 발판으로 바꿨다 — Goal(노란 큐브)과 똑같은 방식으로 색과 트리거만 다르게
+만든 "단순한 특수 발판"이다. 밟으면([`Checkpoint.cs`](Assets/Scripts/OnlyUp/Checkpoint.cs)) 그 순간부터
+낙사해도 시작 지점이 아니라 그 발판 위로 리스폰된다.
+
+`Checkpoint`는 어떤 플레이어 인스턴스도 미리 연결해둘 필요가 없다는 점이 `Goal`과 다르다 — 발판은 플레이어보다
+먼저 생성되므로(`BuildCourse()`가 `CreatePlayer()`보다 먼저 실행됨) 생성 시점엔 참조할 플레이어가 아직 없는데,
+트리거에 실제로 들어온 Collider에서 `GetComponentInParent<RespawnController>()`로 바로 찾아 쓰면 미리
+와이어링하지 않아도 항상 정확히 동작한다. 체크포인트 발판에는 장애물이나 무너짐을 섞지 않아 항상 안전하게
+숨 돌릴 수 있는 지점으로 유지한다.
+
+### 맵 구조 — 실제 Only Up!과 비슷하게 반영한 요소들
 
 - **구간(Zone)별 난이도 변화**: `GameBootstrap.zones` 배열로 코스를 **4구간(쓰레기장→저택→하늘→우주, 각 15개 발판 = 총 60개)**
   으로 나눴다. 뒤 구간으로 갈수록 발판(`platformSize`)이 작아지고(2.6→2.2→1.6→1.4), 장애물 등장 간격
@@ -84,8 +98,9 @@ Input System 패키지를 쓰므로(레거시 Input은 예외를 던짐) 기본 
 
 - **밟으면 무너지는 발판(`CrumblingPlatform`)**: 하늘 구간부터 `crumblingEveryNPlatforms`마다 한 개씩,
   밟으면 잠깐 흔들리다가(`crumbleDelay` 0.9초) 사라지는 발판이 섞인다. 오래 서서 다음 점프를 고민할 수 없게 만들어
-  압박을 준다. **반드시 다시 생긴다**(`crumbleRespawnDelay` 3.5초) — 체크포인트가 없어 떨어지면 처음부터 다시
-  올라오는 구조라, 한 번 무너진 발판이 영영 사라지면 재시도할 때 코스가 끊겨 클리어가 불가능해지기 때문이다.
+  압박을 준다. **반드시 다시 생긴다**(`crumbleRespawnDelay` 3.5초) — 체크포인트에서 리스폰돼도 그 사이에
+  있는 발판들은 그대로 밟고 지나가야 하므로, 한 번 무너진 발판이 영영 사라지면 재시도할 때 코스가 끊겨
+  클리어가 불가능해지기 때문이다.
   무너지는 동안에도 밟힘 감지용 트리거 콜라이더는 켜둔 채로 두어(본체 콜라이더/렌더러만 끔) 재시도 시 다시 작동한다.
 - **옆으로 도는 구간(Traverse)**: 전체 발판 번호 기준 `traverseEveryNPlatforms`(기본 9)마다
   `traverseRunLength`(기본 2)개 발판이 한쪽 방향으로 크게 이동하며 수직 상승은 거의 없는 구간이 삽입된다
@@ -199,7 +214,8 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 | `PlayerController.cs` | WASD 이동, 점프, 장애물 넉백, 애니메이터 파라미터 갱신 |
 | `CameraFollow.cs` | 마우스 궤도 3인칭 카메라 (WASD와 완전히 분리) |
 | `HeightSkyController.cs` | 플레이어 높이에 따라 하늘/안개 색을 지상→정상 색으로 보간 |
-| `RespawnController.cs` | 낙사 감지, 시작 지점 리스폰, 낙사 횟수(`fallCount`) 집계 |
+| `RespawnController.cs` | 낙사 감지, 리스폰(체크포인트 갱신 시 그 지점으로), 낙사 횟수(`fallCount`) 집계 |
+| `Checkpoint.cs` | 밟으면 리스폰 지점을 그 발판으로 갱신하는 세이브 포인트(초록 발판) |
 | `Goal.cs` | 골 도달 감지 → 클리어 UI 표시 또는 다음 씬 전환 |
 | `GameClearUI.cs` | GAME CLEAR 패널 표시/숨김 |
 | `HeightUI.cs` | 현재 높이 실시간 표시 (좌측 상단) |
@@ -253,6 +269,8 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
   `textureImporter=null`). 그래서 원본이 베이스컬러 4096×4096·노멀 2048×2048 무압축(ARGB32)으로 그대로 들어와
   WebGL 빌드가 180MB까지 부풀었었다. 압축 설정을 못 바꾸는 대신, Blender로 GLB를 열어 이미지 자체를
   1024×1024/512×512로 축소한 뒤 다시 GLB로 export해서 소스 단계에서 줄였다 — WebGL 빌드가 180MB → 35MB로 줄었다.
+  (이후 장애물 종류 추가·발판 증가 등으로 기능이 늘면서 최신 빌드 용량은 약 47MB다 — 텍스처 최적화 자체의
+  효과는 여전히 유효하고, 늘어난 만큼은 새로 추가된 기능 때문이다.)
 
 ## 확장 예정 (설계상 이미 고려됨)
 
@@ -278,8 +296,13 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 
 실제 itch.io에 올려서 플레이 테스트까지 완료했다. 업로드 zip은 반드시 `index.html`/`Build`/`TemplateData`가
 zip 최상위에 바로 오도록, 그리고 하위 폴더에 대한 디렉터리 항목이 실제로 포함되도록 압축해야 한다 — Windows
-`Compress-Archive`로 만든 zip은 디렉터리 항목 없이 파일 경로만 슬래시로 표기해서, itch.io 서버가
+PowerShell `Compress-Archive`로 만든 zip은 디렉터리 항목 없이 파일 경로만 슬래시로 표기해서, itch.io 서버가
 `Build`/`TemplateData` 폴더를 아예 못 만들고 그 안의 파일이 전부 404가 나는 문제가 있었다.
+
+**해결**: `Compress-Archive` 대신 Windows에 내장된 `tar.exe`(bsdtar)를 zip 포맷으로 써서 압축한다 —
+`tar.exe -a -c -f OnlyUp_WebGL.zip index.html Build TemplateData`. 이렇게 만든 zip은 `Build/`,
+`TemplateData/` 디렉터리 항목이 명시적으로 포함되어(`ZipFile.OpenRead`로 항목 목록을 확인해 검증)
+itch.io 업로드 시 폴더가 정상적으로 만들어진다.
 
 ## 알려진 제한사항
 
