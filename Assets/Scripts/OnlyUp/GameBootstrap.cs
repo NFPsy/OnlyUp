@@ -35,6 +35,25 @@ namespace OnlyUp
             Tight,
         }
 
+        /// <summary>
+        /// 장애물 종류. 구간마다 쓸 수 있는 종류를 배열로 지정하면 장애물이 나올 때마다
+        /// 이 배열을 순서대로 돌려쓴다 (같은 종류만 계속 나오지 않게).
+        ///
+        /// Static: 발판 가장자리에 고정된 장애물 (반대편으로 돌아가면 됨)
+        /// Moving: 발판 위를 가로로 왕복 (타이밍을 맞춰 지나감)
+        /// VerticalMoving: 발판 바로 위를 위아래로 오르내림 — 내려와 있을 땐 착지 자체가 막히므로
+        ///                 올라간 순간에 맞춰 착지해야 한다 (가장 압박이 큰 종류)
+        /// Rotating: 발판 중심 주위를 계속 공전 — 올라선 뒤에도 계속 피해야 한다.
+        ///           원 안쪽에 안전지대가 남아야 해서 발판이 넓은 구간에서만 쓴다.
+        /// </summary>
+        public enum ObstacleKind
+        {
+            Static,
+            Moving,
+            VerticalMoving,
+            Rotating,
+        }
+
         [System.Serializable]
         public class CourseZone
         {
@@ -45,12 +64,20 @@ namespace OnlyUp
             public float horizontalVariance = 4.2f;
             public MovementPattern pattern = MovementPattern.Straight;
             public int obstacleEveryNPlatforms = 3;
-            public int movingObstacleEveryNth = 2;
             public float movingObstacleSpeed = 0.6f;
             public float staticKnockbackForce = 14f;
             public float staticKnockbackUpward = 6f;
             public float movingKnockbackForce = 16f;
             public float movingKnockbackUpward = 7f;
+
+            [Tooltip("이 구간에서 쓸 장애물 종류들. 장애물이 나올 때마다 순서대로 돌려쓴다")]
+            public ObstacleKind[] obstacleKinds = new[] { ObstacleKind.Static, ObstacleKind.Moving };
+
+            [Tooltip("공전 장애물의 초당 회전 각도(도)")]
+            public float rotatingObstacleSpeed = 90f;
+
+            [Tooltip("몇 개 발판마다 '밟으면 무너지는 발판'을 넣을지 (0이면 사용 안 함)")]
+            public int crumblingEveryNPlatforms = 0;
         }
 
         [Header("구간(Zone) 설정 - Only Up!처럼 갈수록 좁고 빡빡해짐")]
@@ -64,13 +91,15 @@ namespace OnlyUp
                 verticalStep = 3.6f,
                 horizontalVariance = 4.2f,
                 pattern = MovementPattern.Straight,
-                obstacleEveryNPlatforms = 5,
-                movingObstacleEveryNth = 2,
-                movingObstacleSpeed = 0.5f,
+                obstacleEveryNPlatforms = 4,
+                movingObstacleSpeed = 0.55f,
                 staticKnockbackForce = 12f,
                 staticKnockbackUpward = 5f,
                 movingKnockbackForce = 14f,
                 movingKnockbackUpward = 6f,
+                obstacleKinds = new[] { ObstacleKind.Static, ObstacleKind.Moving, ObstacleKind.Rotating },
+                rotatingObstacleSpeed = 70f,
+                crumblingEveryNPlatforms = 0,
             },
             new CourseZone
             {
@@ -81,28 +110,51 @@ namespace OnlyUp
                 horizontalVariance = 4.2f,
                 pattern = MovementPattern.Zigzag,
                 obstacleEveryNPlatforms = 3,
-                movingObstacleEveryNth = 2,
-                movingObstacleSpeed = 0.6f,
+                movingObstacleSpeed = 0.7f,
                 staticKnockbackForce = 14f,
                 staticKnockbackUpward = 6f,
                 movingKnockbackForce = 16f,
                 movingKnockbackUpward = 7f,
+                // 공전 장애물을 앞에 두어 이 구간에서 확실히 여러 번 등장하게 한다
+                // (공전은 원 안쪽 안전지대가 필요해서 발판이 좁아지는 뒤 구간에서는 쓰지 않는다)
+                obstacleKinds = new[] { ObstacleKind.Rotating, ObstacleKind.Moving, ObstacleKind.Static },
+                rotatingObstacleSpeed = 85f,
+                crumblingEveryNPlatforms = 0,
             },
             new CourseZone
             {
                 name = "하늘 (어려움)",
                 platformCount = 15,
-                platformSize = new Vector3(1.5f, 1f, 1.5f),
+                platformSize = new Vector3(1.6f, 1f, 1.6f),
                 verticalStep = 3.6f,
-                horizontalVariance = 4.6f,
+                horizontalVariance = 4.5f,
                 pattern = MovementPattern.Tight,
                 obstacleEveryNPlatforms = 2,
-                movingObstacleEveryNth = 2,
-                movingObstacleSpeed = 0.8f,
+                movingObstacleSpeed = 0.85f,
                 staticKnockbackForce = 17f,
                 staticKnockbackUpward = 7f,
                 movingKnockbackForce = 20f,
                 movingKnockbackUpward = 8f,
+                // 위아래로 오르내리는 장애물 등장 — 내려와 있을 땐 착지 자체가 막혀서 타이밍 압박이 크다
+                obstacleKinds = new[] { ObstacleKind.Static, ObstacleKind.VerticalMoving, ObstacleKind.Moving },
+                crumblingEveryNPlatforms = 5,
+            },
+            new CourseZone
+            {
+                name = "우주 (매우 어려움)",
+                platformCount = 15,
+                platformSize = new Vector3(1.4f, 1f, 1.4f),
+                verticalStep = 3.5f,
+                horizontalVariance = 4.4f,
+                pattern = MovementPattern.Tight,
+                obstacleEveryNPlatforms = 2,
+                movingObstacleSpeed = 1.05f,
+                staticKnockbackForce = 19f,
+                staticKnockbackUpward = 7.5f,
+                movingKnockbackForce = 22f,
+                movingKnockbackUpward = 8.5f,
+                obstacleKinds = new[] { ObstacleKind.VerticalMoving, ObstacleKind.Moving, ObstacleKind.Static },
+                crumblingEveryNPlatforms = 4,
             },
         };
 
@@ -122,6 +174,12 @@ namespace OnlyUp
         public int traverseEveryNPlatforms = 9;
         [Tooltip("한 번 삽입될 때 몇 개의 발판이 연달아 옆으로 도는 구간인지")]
         public int traverseRunLength = 2;
+
+        [Header("무너지는 발판 설정")]
+        [Tooltip("밟은 뒤 무너지기까지의 시간(초). 이 동안 발판이 흔들려 경고를 준다")]
+        public float crumbleDelay = 0.9f;
+        [Tooltip("무너진 뒤 다시 생기기까지의 시간(초). 떨어져서 재시도할 때 코스가 끊기지 않도록 반드시 복구된다")]
+        public float crumbleRespawnDelay = 3.5f;
 
         [Header("시작/도착 발판 설정")]
         public Vector3 startPlatformSize = new Vector3(4.5f, 1f, 4.5f);
@@ -234,6 +292,10 @@ namespace OnlyUp
             for (int zoneIdx = 0; zoneIdx < zones.Length; zoneIdx++)
             {
                 CourseZone zone = zones[zoneIdx];
+                // 장애물 종류는 구간마다 0번부터 다시 돌린다. 전체 통산 번호(obstacleIndex)로 고르면
+                // 앞 구간에서 몇 개가 나왔는지에 따라 위상이 밀려서, 구간이 새로 도입한 종류(예: 공전)가
+                // 한두 번밖에 안 나오는 일이 생긴다.
+                int zoneObstacleIndex = 0;
                 for (int i = 1; i <= zone.platformCount; i++)
                 {
                     globalIndex++;
@@ -248,7 +310,14 @@ namespace OnlyUp
                     }
 
                     bool isTraverse = traverseRemaining > 0;
-                    float minOffset = MinHorizontalOffsetRatio * (prevPlatformSizeX + zone.platformSize.x) * 0.5f;
+
+                    // 마지막 칸은 구간 발판이 아니라 Goal 발판(goalPlatformSize)이 놓이는 자리다.
+                    // Goal은 보통 구간 발판보다 훨씬 넓어서(예: 1.4 vs 5.0), 여기서 zone.platformSize로
+                    // 최소 수평 간격을 계산하면 Goal 밑면이 직전 발판 바로 위를 덮어버려 마지막 점프에서
+                    // 머리가 끼고 클리어 자체가 불가능해진다(실제로 궤적 시뮬레이션으로 충돌 확인).
+                    // 그래서 마지막 칸만 Goal의 실제 크기로 간격을 계산한다.
+                    float curPlatformSizeX = isVeryLast ? goalPlatformSize.x : zone.platformSize.x;
+                    float minOffset = MinHorizontalOffsetRatio * (prevPlatformSizeX + curPlatformSizeX) * 0.5f;
                     Vector3 pos;
                     if (isTraverse)
                     {
@@ -290,17 +359,28 @@ namespace OnlyUp
                         Vector2 offset = EnsureMinHorizontalOffset(dx, dz, minOffset, globalIndex);
                         pos = prev + new Vector3(offset.x, zone.verticalStep, offset.y);
                     }
-                    prevPlatformSizeX = zone.platformSize.x;
+                    prevPlatformSizeX = curPlatformSizeX;
 
                     if (!isVeryLast)
                     {
                         string label = isTraverse ? $"Platform_{globalIndex:00}_Traverse" : $"Platform_{globalIndex:00}";
                         GameObject platformGO = CourseKit.CreatePlatform(courseParent, label, pos, zone.platformSize, isGoal: false);
 
+                        // 밟으면 무너지는 발판: 오래 서서 다음 점프를 고민할 수 없게 만들어 압박을 준다.
+                        // 옆으로 도는 구간은 이동 자체가 이미 도전 요소라 제외한다.
+                        if (!isTraverse && zone.crumblingEveryNPlatforms > 0 && i % zone.crumblingEveryNPlatforms == 0)
+                        {
+                            CourseKit.MakePlatformCrumbling(platformGO, zone.platformSize, crumbleDelay, crumbleRespawnDelay);
+                        }
+
                         // 옆으로 도는 구간에는 장애물을 두지 않는다 (이미 이동 자체가 도전 요소이므로)
                         if (!isTraverse && zone.obstacleEveryNPlatforms > 0 && i % zone.obstacleEveryNPlatforms == 0)
                         {
                             obstacleIndex++;
+                            ObstacleKind kind = (zone.obstacleKinds != null && zone.obstacleKinds.Length > 0)
+                                ? zone.obstacleKinds[zoneObstacleIndex % zone.obstacleKinds.Length]
+                                : ObstacleKind.Static;
+                            zoneObstacleIndex++;
 
                             // 장애물 크기를 발판 크기에 비례하게 만든다 — 예전엔 1유닛 고정이라 발판이
                             // 작은 구간(하늘)에서는 발판 폭 대부분을 장애물이 차지해 착지할 공간이 아예
@@ -312,59 +392,69 @@ namespace OnlyUp
                             float obstacleWidth = Mathf.Clamp(zone.platformSize.x * 0.35f, 0.35f, 1.15f);
                             Vector3 obstacleSize = new Vector3(obstacleWidth, 1f, obstacleWidth);
 
-                            if (obstacleIndex % zone.movingObstacleEveryNth == 0)
+                            switch (kind)
                             {
-                                float travel = zone.platformSize.x * 0.8f;
-                                Vector3 basePos = pos + new Vector3(0f, zone.platformSize.y * 0.5f + 0.5f, 0f);
-                                CourseKit.CreateMovingObstacle(
-                                    courseParent,
-                                    basePos + new Vector3(-travel * 0.5f, 0f, 0f),
-                                    basePos + new Vector3(travel * 0.5f, 0f, 0f),
-                                    obstacleSize,
-                                    zone.movingObstacleSpeed,
-                                    zone.movingKnockbackForce,
-                                    zone.movingKnockbackUpward);
-                            }
-                            else
-                            {
-                                // 발판 정중앙이 아니라 한쪽 가장자리 쪽으로 치우쳐 배치해서, 반대편에
-                                // 캐릭터 한 명이 설 수 있는 착지 공간을 항상 남겨둔다.
-                                // 모델마다(별/구름/받침대) 실제 충돌 모양이 달라서 "가장 넓은 방향"이
-                                // X/Z축과 항상 일치하지는 않으므로, 미리 정한 방향으로 무조건 미는 대신
-                                // 실제로 생성된 콜라이더에 레이캐스트를 쏴서 반대편에 정말 착지 가능한
-                                // 방향을 찾아 그쪽으로 장애물을 민다 (80m 이상 구간에서 발판 폭 대부분을
-                                // 장애물이 차지해 8방향 전부 착지 불가능했던 문제의 근본 수정).
-                                float platformHalf = zone.platformSize.x * 0.5f;
-                                float obstacleHalf = obstacleWidth * 0.5f;
-                                float edgeOffset = Mathf.Max(0f, platformHalf - obstacleHalf - 0.15f);
-                                float standDistance = Mathf.Max(0f, platformHalf - 0.4f - 0.1f);
-
-                                int startIndex = obstacleIndex % candidatePushDirections.Length;
-                                Vector3 pushDir = candidatePushDirections[startIndex];
-                                Collider platformCollider = platformGO.GetComponentInChildren<MeshCollider>();
-                                if (platformCollider == null) platformCollider = platformGO.GetComponent<BoxCollider>();
-
-                                if (platformCollider != null)
+                                case ObstacleKind.Moving:
                                 {
-                                    for (int c = 0; c < candidatePushDirections.Length; c++)
-                                    {
-                                        Vector3 candidate = candidatePushDirections[(startIndex + c) % candidatePushDirections.Length];
-                                        Vector3 standPoint = pos + (-candidate) * standDistance;
-                                        Vector3 rayOrigin = standPoint + Vector3.up * 5f;
-                                        RaycastHit hit;
-                                        if (platformCollider.Raycast(new Ray(rayOrigin, Vector3.down), out hit, 20f))
-                                        {
-                                            pushDir = candidate;
-                                            break;
-                                        }
-                                    }
+                                    float travel = zone.platformSize.x * 0.8f;
+                                    Vector3 basePos = pos + new Vector3(0f, zone.platformSize.y * 0.5f + 0.5f, 0f);
+                                    CourseKit.CreateMovingObstacle(
+                                        courseParent,
+                                        basePos + new Vector3(-travel * 0.5f, 0f, 0f),
+                                        basePos + new Vector3(travel * 0.5f, 0f, 0f),
+                                        obstacleSize,
+                                        zone.movingObstacleSpeed,
+                                        zone.movingKnockbackForce,
+                                        zone.movingKnockbackUpward);
+                                    break;
                                 }
 
-                                Vector3 obstacleOffset = pushDir * edgeOffset;
+                                case ObstacleKind.VerticalMoving:
+                                {
+                                    // 발판 바로 위에서 위아래로 오르내린다. 내려와 있을 땐 착지 자체가 막히고
+                                    // 올라간 순간에는 발판 전체가 비므로 "타이밍을 맞추면 반드시 통과 가능"하다.
+                                    // 위쪽 끝을 발판 위 2.6으로 잡으면 장애물(높이 1) 아랫면이 발판 위 2.1이 되어
+                                    // 캐릭터 키(CharacterController.height = 2.0)보다 높아 확실히 지나갈 수 있다.
+                                    Vector3 lowPos = pos + new Vector3(0f, zone.platformSize.y * 0.5f + 0.5f, 0f);
+                                    Vector3 highPos = pos + new Vector3(0f, zone.platformSize.y * 0.5f + 2.6f, 0f);
+                                    CourseKit.CreateMovingObstacle(
+                                        courseParent, lowPos, highPos, obstacleSize,
+                                        zone.movingObstacleSpeed,
+                                        zone.movingKnockbackForce,
+                                        zone.movingKnockbackUpward);
+                                    break;
+                                }
 
-                                CourseKit.CreateStaticObstacle(
-                                    courseParent, pos + obstacleOffset, zone.platformSize, obstacleSize,
-                                    zone.staticKnockbackForce, zone.staticKnockbackUpward);
+                                case ObstacleKind.Rotating:
+                                {
+                                    // 공전 반지름을 발판 반폭보다 작게 잡아 원 안쪽에 안전지대를 남긴다.
+                                    // (안전지대 반지름 = radius - 장애물 반폭 이 캐릭터 반지름 0.4보다 커야 한다)
+                                    float platformHalf = zone.platformSize.x * 0.5f;
+                                    float rotatingWidth = obstacleWidth * 0.8f;
+                                    Vector3 rotatingSize = new Vector3(rotatingWidth, 1f, rotatingWidth);
+                                    float radius = platformHalf * 0.85f;
+                                    Vector3 center = pos + new Vector3(0f, zone.platformSize.y * 0.5f + 0.5f, 0f);
+                                    CourseKit.CreateRotatingObstacle(
+                                        courseParent, center, radius, rotatingSize,
+                                        zone.rotatingObstacleSpeed,
+                                        obstacleIndex * 57f, // 장애물마다 시작 각도를 다르게 해서 전부 같은 위상으로 돌지 않게 한다
+                                        zone.movingKnockbackForce,
+                                        zone.movingKnockbackUpward);
+                                    break;
+                                }
+
+                                default:
+                                {
+                                    // 발판 정중앙이 아니라 한쪽 가장자리 쪽으로 치우쳐 배치해서, 반대편에
+                                    // 캐릭터 한 명이 설 수 있는 착지 공간을 항상 남겨둔다.
+                                    float platformHalf = zone.platformSize.x * 0.5f;
+                                    float edgeOffset = Mathf.Max(0f, platformHalf - obstacleWidth * 0.5f - 0.15f);
+                                    Vector3 pushDir = FindSafePushDirection(platformGO, pos, platformHalf, obstacleIndex);
+                                    CourseKit.CreateStaticObstacle(
+                                        courseParent, pos + pushDir * edgeOffset, zone.platformSize, obstacleSize,
+                                        zone.staticKnockbackForce, zone.staticKnockbackUpward);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -374,6 +464,45 @@ namespace OnlyUp
             }
 
             return prev;
+        }
+
+        /// <summary>
+        /// 고정 장애물을 발판의 어느 쪽 가장자리로 밀지 정한다.
+        /// 모델마다(별/구름/받침대) 실제 충돌 모양이 달라서 "가장 넓은 방향"이 X/Z축과 항상
+        /// 일치하지는 않으므로, 미리 정한 방향으로 무조건 미는 대신 실제로 생성된 콜라이더에
+        /// 레이캐스트를 쏴서 반대편에 정말 착지 가능한 방향을 찾아 그쪽으로 민다
+        /// (발판 폭 대부분을 장애물이 차지해 8방향 전부 착지 불가능했던 문제의 근본 수정).
+        /// </summary>
+        private static Vector3 FindSafePushDirection(GameObject platformGO, Vector3 platformPos, float platformHalf, int obstacleIndex)
+        {
+            float standDistance = Mathf.Max(0f, platformHalf - 0.4f - 0.1f);
+            int startIndex = obstacleIndex % candidatePushDirections.Length;
+            Vector3 fallbackDir = candidatePushDirections[startIndex];
+
+            // 발판 본체 콜라이더를 찾는다. 무너지는 발판에는 밟힘 감지용 트리거 BoxCollider가 추가로
+            // 붙어있는데, 그건 발판 위쪽 공간에 떠 있어서 착지 가능 여부 판정에 쓰면 안 되므로 제외한다.
+            Collider platformCollider = platformGO.GetComponentInChildren<MeshCollider>();
+            if (platformCollider == null)
+            {
+                foreach (BoxCollider box in platformGO.GetComponents<BoxCollider>())
+                {
+                    if (!box.isTrigger) { platformCollider = box; break; }
+                }
+            }
+            if (platformCollider == null) return fallbackDir;
+
+            for (int c = 0; c < candidatePushDirections.Length; c++)
+            {
+                Vector3 candidate = candidatePushDirections[(startIndex + c) % candidatePushDirections.Length];
+                Vector3 standPoint = platformPos + (-candidate) * standDistance;
+                Vector3 rayOrigin = standPoint + Vector3.up * 5f;
+                RaycastHit hit;
+                if (platformCollider.Raycast(new Ray(rayOrigin, Vector3.down), out hit, 20f))
+                {
+                    return candidate;
+                }
+            }
+            return fallbackDir;
         }
     }
 }

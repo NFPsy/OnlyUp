@@ -398,6 +398,69 @@ namespace OnlyUp
         }
 
         /// <summary>
+        /// 발판 중심 주위를 계속 빙빙 도는 장애물을 놓는다. 왕복 장애물과 달리 멈추는 순간이 없어서
+        /// 발판에 올라선 뒤에도 계속 피해야 하므로 체감 난이도가 확실히 올라간다.
+        /// radius는 호출부에서 "발판 반폭보다 작게" 계산해 넘기므로 원 안쪽에 항상 설 수 있는
+        /// 안전지대가 남는다 (타이밍만 맞추면 반드시 통과 가능).
+        /// </summary>
+        public static void CreateRotatingObstacle(Transform parent, Vector3 center, float radius, Vector3 obstacleSize, float angularSpeed = 90f, float startAngleDeg = 0f, float knockbackForce = 16f, float knockbackUpward = 7f)
+        {
+            GameObject obstacle = new GameObject("Obstacle_Rotating");
+            obstacle.transform.SetParent(parent, false);
+            obstacle.transform.position = center + new Vector3(radius, 0f, 0f);
+
+            // 스크립트로 매 프레임 위치를 옮기므로 Kinematic Rigidbody로 표시한다 (MovingObstacle과 동일한 이유)
+            Rigidbody rb = obstacle.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            BoxCollider collider = obstacle.AddComponent<BoxCollider>();
+            collider.size = obstacleSize;
+
+            VisualSwapTarget visualSwap = obstacle.AddComponent<VisualSwapTarget>();
+            GameObject visual = CreatePrimitiveVisual(obstacle.transform, PrimitiveType.Cube, obstacleSize);
+            visualSwap.visual = visual.transform;
+
+            PlatformColliderSync sync = obstacle.AddComponent<PlatformColliderSync>();
+            sync.targetCollider = collider;
+            sync.visual = visual.transform;
+
+            ApplyObstacleVisual(visualSwap, sync, visual, new Color(0.9f, 0.2f, 0.6f));
+
+            Obstacle obstacleScript = obstacle.AddComponent<Obstacle>();
+            obstacleScript.knockbackForce = knockbackForce;
+            obstacleScript.knockbackUpward = knockbackUpward;
+
+            RotatingObstacle rotator = obstacle.AddComponent<RotatingObstacle>();
+            rotator.center = center;
+            rotator.radius = radius;
+            rotator.angularSpeed = angularSpeed;
+            rotator.startAngleDeg = startAngleDeg;
+        }
+
+        /// <summary>
+        /// 이미 만들어진 발판을 "밟으면 잠시 뒤 무너졌다가 다시 생기는 발판"으로 바꾼다.
+        /// 밟힘을 감지할 트리거 콜라이더를 발판 윗면 바로 위 공간에 붙이고 CrumblingPlatform을 단다.
+        /// 발판 본체 콜라이더(모델 모양 MeshCollider일 수 있음)는 건드리지 않는다 — CrumblingPlatform이
+        /// 무너질 때 자식까지 훑어서 "트리거가 아닌" 콜라이더만 껐다 켠다.
+        /// </summary>
+        public static void MakePlatformCrumbling(GameObject platform, Vector3 platformSize, float crumbleDelay, float respawnDelay)
+        {
+            // 발판 윗면(로컬 +size.y/2)부터 캐릭터 키 남짓한 높이까지를 밟힘 감지 영역으로 삼는다
+            BoxCollider trigger = platform.AddComponent<BoxCollider>();
+            trigger.isTrigger = true;
+            trigger.center = new Vector3(0f, platformSize.y * 0.5f + 1f, 0f);
+            trigger.size = new Vector3(platformSize.x * 0.9f, 2f, platformSize.z * 0.9f);
+
+            CrumblingPlatform crumbling = platform.AddComponent<CrumblingPlatform>();
+            crumbling.crumbleDelay = crumbleDelay;
+            crumbling.respawnDelay = respawnDelay;
+
+            VisualSwapTarget visualSwap = platform.GetComponent<VisualSwapTarget>();
+            if (visualSwap != null) crumbling.visual = visualSwap.visual;
+        }
+
+        /// <summary>
         /// 배경 음악을 재생한다. 씬에 이미 "BGM" 오브젝트가 있으면 그 AudioSource를 그대로 반환하고
         /// (중복 생성 방지), Resources/Audio에 클립이 없으면 아무것도 만들지 않고 null을 반환한다.
         /// 반환하는 AudioSource는 PauseMenuUI가 배경음악 켜기/끄기 토글에 사용한다.
