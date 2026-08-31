@@ -50,7 +50,7 @@ Input System 패키지를 쓰므로(레거시 Input은 예외를 던짐) 기본 
 | 씬 | 설명 |
 |---|---|
 | `Assets/Scenes/SampleScene.unity` | Unity 기본 템플릿 씬 (건드리지 않음) |
-| `Assets/Scenes/OnlyUp.unity` | **유일한 스테이지.** 시작부터 정상까지 끊기지 않는 단일 등반 코스 (`GameBootstrap`, 발판 45개) |
+| `Assets/Scenes/OnlyUp.unity` | **유일한 스테이지.** 시작부터 정상까지 끊기지 않는 단일 등반 코스 (`GameBootstrap`, 발판 60개) |
 
 원래 씬을 둘로 나눠 중간에 전환하는 구조였지만, 실제 *Only Up!*처럼 "떨어지면 처음부터"라는 긴장감을 살리기 위해
 씬 전환 없는 **하나의 긴 코스**로 통합했습니다. 체크포인트가 없어서 낙사하면 항상 맨 처음으로 되돌아갑니다.
@@ -194,7 +194,7 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 
 | 스크립트 | 역할 |
 |---|---|
-| `GameBootstrap.cs` | 단일 등반 코스(구간별 난이도 + 옆으로 도는 구간, 발판 45개) 배치 |
+| `GameBootstrap.cs` | 단일 등반 코스(구간별 난이도 + 옆으로 도는 구간, 4구간·발판 60개) 배치 |
 | `CourseKit.cs` | 플레이어/카메라/UI/발판/장애물 생성 공용 로직 |
 | `PlayerController.cs` | WASD 이동, 점프, 장애물 넉백, 애니메이터 파라미터 갱신 |
 | `CameraFollow.cs` | 마우스 궤도 3인칭 카메라 (WASD와 완전히 분리) |
@@ -233,12 +233,13 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
   연보라 큐브로 자동 대체된다. (이전에 쓰던 Celestial Plush Cloud / Pastel Cloud Cushion / Star Moon Cloud 3종은
   마음에 들지 않아 이 5종으로 교체했다.)
 - 장애물: `Assets/Resources/Obstacles/Obstacle_*.prefab` (Frosted Blue Sphere / Peach Sphere / Textured Iridescent Orb) —
-  발판과 동일한 파이프라인으로 임포트한 구슬 모양 모델 3종. `CourseKit.ApplyObstacleVisual()`이 정지/이동 장애물을
-  만들 때마다 이 중 하나를 무작위로 골라 Visual만 교체하고, 폴더가 비어있으면 기존 빨강(정지)/주황(이동) 큐브로
-  자동 대체된다. 발판(`CreatePlatform`)과 달리 콜라이더는 절대 모델 모양을 따라가지 않고 항상 코드로 계산한
-  `obstacleSize` 박스 그대로 유지한다 — 장애물 난이도(발판 크기에 비례한 폭, 가장자리 배치, 착지 공간 레이캐스트
-  검증)가 전부 이 박스 크기를 기준으로 계산되므로, 모델이 둥근 구 형태라도 실제 충돌 범위가 눈에 보이는 모양보다
-  넓어 보일 수 있다(의도된 동작).
+  발판과 동일한 파이프라인으로 임포트한 구슬 모양 모델 3종. `CourseKit.ApplyObstacleVisual()`이 정지(`Static`)/
+  왕복(`Moving`, 가로·세로 공용)/공전(`Rotating`) 장애물을 만들 때마다 이 중 하나를 무작위로 골라 Visual만
+  교체하고, 폴더가 비어있으면 기존 빨강(정지)/주황(왕복)/분홍(공전) 큐브로 자동 대체된다. 발판(`CreatePlatform`)과
+  달리 콜라이더는 절대 모델 모양을 따라가지 않고 항상 코드로 계산한 `obstacleSize` 박스 그대로 유지한다 —
+  장애물 난이도(발판 크기에 비례한 폭, 가장자리 배치, 착지 공간 레이캐스트 검증, 공전 반지름)가 전부 이 박스
+  크기를 기준으로 계산되므로, 모델이 둥근 구 형태라도 실제 충돌 범위가 눈에 보이는 모양보다 넓어 보일 수 있다
+  (의도된 동작).
 - 발판/장애물 모델 모두 원본이 GLB가 아니라 **FBX**로 제공됐고, 5십만 트라이앵글짜리 고폴리였다. Blender를 헤드리스로 돌려
   FBX를 임포트한 뒤 디시메이트하고 **GLB로 export**해서 기존 glTFast 임포트 파이프라인을 그대로 재사용했다(6000트라이앵글까지 축소).
   원본 FBX 자체가 베이스컬러+노멀 텍스처만 갖고 있고 ORM(금속성/거칠기) 채널이 없었기 때문에, FBX→GLB 변환 과정에서
@@ -257,7 +258,8 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 
 - **스테이지 재도입**: `Goal.nextSceneName`에 다음 씬 이름만 지정하면 언제든 다시 씬을 이어붙일 수 있음 (지금은 비워둬서 단일 스테이지)
 - **새 장애물/발판 종류**: `CourseKit`에 생성 함수를 추가하고 Bootstrap의 배치 로직에서 호출하면 됨 (발판/장애물 모두
-  `VisualSwapTarget`을 통해 Visual만 교체하는 구조라, 새 VARCO 3D 모델을 추가하는 것도 같은 방식으로 확장하면 됨)
+  `VisualSwapTarget`을 통해 Visual만 교체하는 구조라, 새 VARCO 3D 모델을 추가하는 것도 같은 방식으로 확장하면 됨).
+  `RotatingObstacle`(공전)·`CrumblingPlatform`(무너지는 발판)이 실제로 이 구조를 따라 추가된 예시다.
 
 ## 사운드
 
