@@ -84,6 +84,11 @@ namespace OnlyUp
         {
             // Time.timeScale이 0인 채로 에디터 Play 모드를 멈추면 다음 실행에 영향을 줄 수 있으니 되돌려둔다.
             Time.timeScale = 1f;
+            // #if / #else / #endif는 "코드를 실행하기 전에" 둘 중 한쪽만 골라 포함시키는 전처리기 지시문이다.
+            // UNITY_EDITOR는 유니티 에디터 안에서 Play 버튼으로 실행 중일 때만 자동으로 정의되는 값이라,
+            // 에디터에서는 위쪽(Play 모드 종료)이, 실제로 빌드된 게임(itch.io 웹 버전 등)에서는 아래쪽
+            // (Application.Quit, 게임 자체를 종료)이 실행된다. Application.Quit()은 에디터에서는
+            // 아무 효과가 없어서(그냥 무시됨), 이렇게 나눠야 에디터에서 테스트할 때도 "종료" 버튼이 동작한다.
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else

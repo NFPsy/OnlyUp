@@ -20,15 +20,23 @@ namespace OnlyUp
         {
             if (timeText == null) return;
 
+            // GameClearUI의 패널(panel)이 켜져 있으면 이미 클리어한 상태라는 뜻이다.
+            // activeSelf는 "이 오브젝트 자체가 켜져 있는지"를 알려주는 Unity 기본 속성이다.
             bool cleared = clearUI != null && clearUI.panel != null && clearUI.panel.activeSelf;
             if (!cleared)
             {
+                // Time.deltaTime은 "직전 프레임 이후 몇 초가 지났는지"이므로, 매 프레임 계속
+                // 더해나가면 elapsed에 실제로 흐른 시간(초)이 누적된다. 클리어한 뒤에는 더하지
+                // 않으므로 그 시점 기록에서 시간이 멈춘 것처럼 보인다.
                 elapsed += Time.deltaTime;
             }
 
+            // elapsed는 소수점이 있는 초 단위(예: 75.34초)라서, 정수 초로 자르고(FloorToInt)
+            // 분(/60, 나눗셈의 몫)과 초(%60, 나눗셈의 나머지)로 나눠 "분:초" 형태로 만든다.
             int totalSeconds = Mathf.FloorToInt(elapsed);
             int minutes = totalSeconds / 60;
             int seconds = totalSeconds % 60;
+            // {minutes:00}은 숫자가 한 자리여도 앞에 0을 채워 두 자리로 보여준다 (예: 5 -> "05").
             timeText.text = $"Time: {minutes:00}:{seconds:00}";
         }
     }

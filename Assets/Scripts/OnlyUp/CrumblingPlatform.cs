@@ -53,9 +53,17 @@ namespace OnlyUp
         {
             if (busy) return;
             if (!other.CompareTag("Player")) return;
+            // StartCoroutine은 "시간이 걸리는 작업을 여러 프레임에 걸쳐 순서대로 실행"하게 해주는
+            // Unity 기능이다(코루틴). 아래 CrumbleRoutine()은 보통 함수와 달리 한 번에 끝나지 않고,
+            // yield return을 만날 때마다 잠깐 멈췄다가 다음 프레임에 이어서 실행된다 — 그래서
+            // "0.9초 동안 흔들다가 → 사라지고 → 3.5초 기다렸다가 → 다시 생김"처럼 시간이 걸리는
+            // 연출을 자연스럽게 표현할 수 있다.
             StartCoroutine(CrumbleRoutine());
         }
 
+        // 반환 타입이 IEnumerator인 함수는 코루틴으로 실행할 수 있다.
+        // yield return을 만나면 그 지점에서 실행을 멈추고, 조건이 만족되면(다음 프레임이 되거나,
+        // 지정한 시간이 지나면) 멈췄던 바로 다음 줄부터 다시 이어서 실행한다.
         private IEnumerator CrumbleRoutine()
         {
             busy = true;
@@ -67,17 +75,24 @@ namespace OnlyUp
                 elapsed += Time.deltaTime; // 일시정지 중(timeScale=0)에는 자연스럽게 멈춘다
                 if (visual != null)
                 {
+                    // Random.Range(-a, a)는 -a~a 사이의 무작위 값을 하나 뽑아준다.
+                    // 매 프레임 살짝 다른 위치로 옮기면 "덜덜 떨리는" 것처럼 보인다.
                     visual.localPosition = visualBaseLocalPos + new Vector3(
                         Random.Range(-shakeAmount, shakeAmount),
                         0f,
                         Random.Range(-shakeAmount, shakeAmount));
                 }
+                // yield return null은 "딱 한 프레임만 쉬었다가 다음 프레임에 여기부터 계속"이라는 뜻이다.
+                // 이 덕분에 while 루프가 한 번에 다 도는 게 아니라, crumbleDelay초 동안 매 프레임
+                // 흔들리는 모습을 실제로 화면에 보여줄 수 있다.
                 yield return null;
             }
             if (visual != null) visual.localPosition = visualBaseLocalPos;
 
             // 2. 무너짐: 충돌/외형을 함께 꺼서 발판이 사라진 것처럼 보이게 한다
             SetPlatformEnabled(false);
+            // WaitForSeconds(초)는 "그만큼 실제 시간이 지날 때까지 여기서 기다렸다가 이어서 실행"하라는
+            // 뜻이다. respawnDelay초 동안 발판이 사라진 채로 유지된다.
             yield return new WaitForSeconds(respawnDelay);
 
             // 3. 복구: 다시 올라올 때를 위해 원상복구한다

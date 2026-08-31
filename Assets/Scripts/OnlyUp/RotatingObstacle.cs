@@ -43,6 +43,10 @@ namespace OnlyUp
             Apply();
         }
 
+        // 각도(angle)를 실제 좌표로 바꿔서 장애물을 원 위의 그 지점으로 옮긴다.
+        // 수학에서 원 위의 점은 (중심 + cos(각도)*반지름, 중심 + sin(각도)*반지름)로 구할 수 있다
+        // (시계 12시 방향을 각도 0으로 보고, 각도가 커질수록 시계 반대 방향으로 도는 원리).
+        // Mathf.Deg2Rad는 "도(360도 기준)"를 삼각함수가 요구하는 "라디안" 단위로 바꿔주는 상수다.
         private void Apply()
         {
             float rad = angle * Mathf.Deg2Rad;
