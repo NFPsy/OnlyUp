@@ -277,6 +277,20 @@ namespace OnlyUp
             GameClearUI clearUI = CourseKit.CreateUI(player.transform, startPosition.y, bgmSource, player.GetComponent<PlayerController>());
 
             CourseKit.ConfigureGoal(courseParent, goalPosition, goalPlatformSize, player.GetComponent<PlayerController>(), clearUI, nextStageSceneName);
+
+#if UNITY_EDITOR
+            // 에디터 테스트 전용: 숫자키 1~5로 구간별 시작 지점, PageUp/PageDown으로 발판 단위 이동.
+            // DebugCourseTeleport.cs 자체가 UNITY_EDITOR로 감싸져 있어 빌드에는 포함되지 않는다.
+            int[] zoneStartGlobalIndex = new int[zones.Length];
+            int cumulativeGlobalIndex = 0;
+            for (int z = 0; z < zones.Length; z++)
+            {
+                zoneStartGlobalIndex[z] = cumulativeGlobalIndex + 1;
+                cumulativeGlobalIndex += zones[z].platformCount;
+            }
+            DebugCourseTeleport debugTeleport = player.AddComponent<DebugCourseTeleport>();
+            debugTeleport.Setup(courseParent, zoneStartGlobalIndex);
+#endif
         }
 
         [ContextMenu("코스 생성/재생성 (에디터)")]
