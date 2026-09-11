@@ -44,6 +44,14 @@ namespace OnlyUp
         private Vector3 verticalVelocity; // y축 속도(중력/점프)만 별도로 관리
         private Vector3 knockbackVelocity; // 장애물에 부딪혔을 때의 수평 넉백 속도 (서서히 감쇠)
 
+        // --- 얼음 발판(IcePlatform) 전용 상태 ---
+        // 평소 이 게임의 수평 이동에는 관성이 전혀 없다(입력을 놓으면 그 프레임에 바로 멈춤).
+        // 얼음 발판 위에 서 있는 동안에만 아래 값이 0보다 커지고, 그때는 목표 속도로 곧바로 바뀌는 대신
+        // 초당 slipDeceleration만큼씩만 따라가서 "미끄러지는" 느낌이 난다.
+        private Vector3 horizontalVelocity; // 지금 실제로 적용 중인 수평 속도 (얼음 위에서 서서히 변한다)
+        private float slipDeceleration;     // 0이면 얼음이 아님 → 기존과 완전히 동일하게 즉시 반응
+        private IcePlatform slipSource;     // 지금 미끄러짐을 걸어준 발판 (발판을 갈아탈 때 잘못 해제되는 것 방지)
+
         // --- 애니메이션 전용 상태 (Animator가 없으면 전혀 쓰이지 않는다) ---
         private bool wasStationary = true;  // 직전 프레임에 거의 멈춰있었는지 (제자리 방향전환 감지용)
         private int jumpVariantCounter;     // 이동 중 점프 애니메이션 3종을 돌아가며 쓰기 위한 카운터
@@ -142,21 +150,37 @@ namespace OnlyUp
             // 5. 중력 적용
             verticalVelocity.y += gravity * Time.deltaTime;
 
-            // 6. 실제 이동 (수평 이동 + 넉백 속도 + 수직 속도)을 한 번에 Move로 적용
-            Vector3 motion = (moveDir * moveSpeed + knockbackVelocity + new Vector3(0f, verticalVelocity.y, 0f)) * Time.deltaTime;
+            // 6. 수평 속도 결정. 평소에는 입력에 즉시 반응하지만(관성 없음), 얼음 발판 위에 서 있는
+            //    동안에는 목표 속도로 곧바로 바뀌지 않고 초당 slipDeceleration만큼만 따라가 미끄러진다.
+            //    MoveTowards(현재값, 목표값, 이번 프레임에 움직일 수 있는 최대량)는 목표를 지나치지 않고
+            //    딱 그만큼만 다가가므로, 가속(키를 눌렀을 때)과 감속(키를 놓았을 때) 모두 같은 비율로 적용된다.
+            //    공중에서는 얼음이어도 기존과 똑같이 즉시 반응한다 — 점프하면 바로 평소 조작감으로 돌아와야
+            //    "얼음 위에서만 미끄럽다"는 규칙이 분명해지기 때문이다.
+            Vector3 targetHorizontal = moveDir * moveSpeed;
+            if (slipDeceleration > 0f && isGrounded)
+            {
+                horizontalVelocity = Vector3.MoveTowards(horizontalVelocity, targetHorizontal, slipDeceleration * Time.deltaTime);
+            }
+            else
+            {
+                horizontalVelocity = targetHorizontal;
+            }
+
+            // 7. 실제 이동 (수평 이동 + 넉백 속도 + 수직 속도)을 한 번에 Move로 적용
+            Vector3 motion = (horizontalVelocity + knockbackVelocity + new Vector3(0f, verticalVelocity.y, 0f)) * Time.deltaTime;
             controller.Move(motion);
 
             // 넉백 속도는 시간이 지나면서 서서히 줄어들어 다시 일반 조작으로 돌아온다
             knockbackVelocity = Vector3.MoveTowards(knockbackVelocity, Vector3.zero, knockbackDrag * Time.deltaTime);
 
-            // 7. 이동 방향으로 캐릭터(비주얼 포함)를 부드럽게 회전
+            // 8. 이동 방향으로 캐릭터(비주얼 포함)를 부드럽게 회전
             if (moveDir.sqrMagnitude > 0.0001f)
             {
                 Quaternion targetRot = Quaternion.LookRotation(moveDir, Vector3.up);
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSpeed * Time.deltaTime);
             }
 
-            // 8. 실제 캐릭터 모델(Animator)이 붙어있을 때만 애니메이션 파라미터를 갱신한다
+            // 9. 실제 캐릭터 모델(Animator)이 붙어있을 때만 애니메이션 파라미터를 갱신한다
             if (animator != null)
             {
                 animator.SetFloat("Speed", normalizedSpeed);
@@ -168,11 +192,39 @@ namespace OnlyUp
 
         /// <summary>
         /// 리스폰 시 RespawnController가 호출: 낙하 속도를 0으로 초기화해 리스폰 직후 순간 낙하를 방지한다.
+        /// 얼음 발판 위에서 떨어졌을 수도 있으므로 미끄러짐 상태와 관성 속도도 같이 초기화한다 —
+        /// 리스폰은 순간이동이라 얼음 발판의 트리거 이탈(OnTriggerExit)이 확실히 불린다고 보장할 수 없고,
+        /// 미끄러짐이 남아있으면 체크포인트에 되살아나자마자 이유 없이 미끄러지게 된다.
         /// </summary>
         public void ResetVerticalVelocity()
         {
             verticalVelocity = Vector3.zero;
             knockbackVelocity = Vector3.zero;
+            horizontalVelocity = Vector3.zero;
+            slipDeceleration = 0f;
+            slipSource = null;
+        }
+
+        /// <summary>
+        /// 얼음 발판(<see cref="IcePlatform"/>)을 밟았을 때 호출된다. 이 순간부터 발판에서 내려갈 때까지
+        /// 수평 이동에 관성이 생겨 미끄러진다. deceleration이 작을수록 더 미끄럽다.
+        /// </summary>
+        public void EnterSlipperySurface(IcePlatform source, float deceleration)
+        {
+            slipSource = source;
+            slipDeceleration = deceleration;
+        }
+
+        /// <summary>
+        /// 얼음 발판에서 벗어났을 때 호출된다. 지금 미끄러짐을 걸어준 발판이 자기 자신일 때만 해제한다 —
+        /// 얼음 발판에서 다른 얼음 발판으로 곧바로 옮겨가면 "새 발판 진입 → 이전 발판 이탈" 순서로 불릴 수
+        /// 있는데, 그때 이전 발판이 새 발판의 미끄러짐까지 꺼버리면 안 되기 때문이다.
+        /// </summary>
+        public void ExitSlipperySurface(IcePlatform source)
+        {
+            if (slipSource != source) return;
+            slipSource = null;
+            slipDeceleration = 0f;
         }
 
         /// <summary>

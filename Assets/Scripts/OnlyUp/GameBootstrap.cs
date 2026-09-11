@@ -9,15 +9,15 @@ namespace OnlyUp
     /// 실제 생성 로직(플레이어/카메라/UI/발판/장애물)은 CourseKit에 공통으로 모아뒀고,
     /// 이 스크립트는 "코스를 어떻게 배치할지"만 담당한다.
     ///
-    /// Only Up!처럼 구간(Zone)마다 난이도가 달라지고(쓰레기장→저택→하늘로 갈수록 발판이
-    /// 좁아지고 간격이 빡빡해짐), 계속 위로만 가지 않고 가끔 옆으로 도는 구간이 섞여 있으며,
+    /// Only Up!처럼 구간(Zone)마다 난이도가 달라지고(쓰레기장→저택→하늘→우주→잔해 지대로 갈수록
+    /// 발판이 좁아지고 간격이 빡빡해짐), 계속 위로만 가지 않고 가끔 옆으로 도는 구간이 섞여 있으며,
     /// 높이가 오를수록 하늘 색이 지상의 파스텔톤에서 정상의 짙은 색으로 서서히 바뀐다.
     ///
     /// 중간에 씬을 나누지 않는 하나의 긴 등반이다. 원래는 체크포인트가 전혀 없어서 낙사하면 항상
-    /// 맨 처음으로 돌아가는 구조였지만(Only Up!의 가혹한 낙사 페널티와 동일한 컨셉), 코스가 60개
-    /// 발판으로 길어지면서 그 페널티가 지나치게 가혹해졌다. 그래서 50/100/150m 지점에 초록색
-    /// 체크포인트 발판(<see cref="Checkpoint"/>)을 두어, 낙사해도 마지막으로 밟은 체크포인트부터
-    /// 다시 시작하게 했다. Goal에 도달하면 GAME CLEAR UI를 표시한다.
+    /// 맨 처음으로 돌아가는 구조였지만(Only Up!의 가혹한 낙사 페널티와 동일한 컨셉), 코스가 75개
+    /// 발판으로 길어지면서 그 페널티가 지나치게 가혹해졌다. 그래서 50/100/150/200m 지점(구간이
+    /// 바뀌는 높이 부근)에 초록색 체크포인트 발판(<see cref="Checkpoint"/>)을 두어, 낙사해도 마지막으로
+    /// 밟은 체크포인트부터 다시 시작하게 했다. Goal에 도달하면 GAME CLEAR UI를 표시한다.
     /// </summary>
     public class GameBootstrap : MonoBehaviour
     {
@@ -30,12 +30,16 @@ namespace OnlyUp
         /// Straight: 거의 수직으로 살짝만 흔들리며 안정적으로 직진 상승.
         /// Zigzag: 저택 계단처럼 매 발판마다 좌우로 확실하게 갈아타는 스위치백 구조.
         /// Tight: 사방으로 흔들리는 좁고 불규칙한 경로로 정밀한 점프를 요구.
+        /// Spiral: 나아가는 방향을 매 발판마다 일정 각도씩 돌려서, 위에서 내려다보면 원을 그리며
+        ///         올라가는 나선 계단이 된다. 방향이 계속 바뀌니 카메라를 계속 돌려야 하지만,
+        ///         발판 사이 거리는 항상 일정해서(Tight처럼 들쭉날쭉하지 않음) 거리 자체는 예측 가능하다.
         /// </summary>
         public enum MovementPattern
         {
             Straight,
             Zigzag,
             Tight,
+            Spiral,
         }
 
         /// <summary>
@@ -48,6 +52,9 @@ namespace OnlyUp
         ///                 올라간 순간에 맞춰 착지해야 한다 (가장 압박이 큰 종류)
         /// Rotating: 발판 중심 주위를 계속 공전 — 올라선 뒤에도 계속 피해야 한다.
         ///           원 안쪽에 안전지대가 남아야 해서 발판이 넓은 구간에서만 쓴다.
+        /// Sweep: 발판 폭 전체를 좌우로 빠르게 훑고 지나간다. 발판 바깥까지 넉넉히 나갔다 돌아오므로
+        ///        왕복 주기마다 발판이 완전히 비는 시간이 반드시 생긴다 — 그 순간에 맞춰 들어가야 한다
+        ///        (빈 시간의 길이는 CourseKit.CreateSweepObstacle이 속도를 제한해서 보장한다).
         /// </summary>
         public enum ObstacleKind
         {
@@ -55,6 +62,7 @@ namespace OnlyUp
             Moving,
             VerticalMoving,
             Rotating,
+            Sweep,
         }
 
         [System.Serializable]
@@ -79,8 +87,14 @@ namespace OnlyUp
             [Tooltip("공전 장애물의 초당 회전 각도(도)")]
             public float rotatingObstacleSpeed = 90f;
 
+            [Tooltip("나선(Spiral) 패턴에서 발판 하나마다 진행 방향을 몇 도씩 돌릴지 (Spiral 패턴에서만 사용)")]
+            public float spiralAngleStepDeg = 110f;
+
             [Tooltip("몇 개 발판마다 '밟으면 무너지는 발판'을 넣을지 (0이면 사용 안 함)")]
             public int crumblingEveryNPlatforms = 0;
+
+            [Tooltip("몇 개 발판마다 '밟으면 미끄러지는 얼음 발판'을 넣을지 (0이면 사용 안 함)")]
+            public int iceEveryNPlatforms = 0;
         }
 
         [Header("구간(Zone) 설정 - Only Up!처럼 갈수록 좁고 빡빡해짐")]
@@ -159,6 +173,34 @@ namespace OnlyUp
                 obstacleKinds = new[] { ObstacleKind.VerticalMoving, ObstacleKind.Moving, ObstacleKind.Static },
                 crumblingEveryNPlatforms = 4,
             },
+            new CourseZone
+            {
+                name = "잔해 지대 (극한)",
+                platformCount = 15,
+                platformSize = new Vector3(1.25f, 1f, 1.25f),
+                verticalStep = 3.45f,
+                horizontalVariance = 4.3f,
+                pattern = MovementPattern.Spiral,
+                spiralAngleStepDeg = 110f,
+                // 장애물 간격 1 = "얼음도 옆으로 도는 구간도 아닌 발판이면 전부 장애물이 있다"는 뜻.
+                // 실제로는 사이사이가 얼음 발판(iceEveryNPlatforms = 2)이라 장애물 발판과 얼음 발판이
+                // 번갈아 나오는 모양이 되어, 이 구간은 쉬어갈 수 있는 평범한 발판이 사실상 없다.
+                obstacleEveryNPlatforms = 1,
+                movingObstacleSpeed = 1.2f,
+                staticKnockbackForce = 21f,
+                staticKnockbackUpward = 8f,
+                movingKnockbackForce = 24f,
+                movingKnockbackUpward = 9f,
+                // 새로 추가한 Sweep을 맨 앞에 둬서 이 구간에서 확실히 먼저 등장하게 하고, 한 번 더 끼워
+                // 넣어 이 구간의 대표 장애물로 삼는다. 평범한 Moving은 빼도 되는데, Sweep이 사실상
+                // "훨씬 빠른 Moving"이라 둘을 같이 두면 느린 쪽이 맥이 빠지기 때문이다.
+                // Static은 남겨둔다 — 이 구간 발판이 가장 좁아서 "장애물 반대편에 착지 공간이 남는지"
+                // 레이캐스트 검증이 가장 빡빡하게 걸리는 곳이라, 그 보장을 여기서도 실제로 확인하기 위함이다.
+                // (공전(Rotating)은 원 안쪽 안전지대가 필요한데 이 구간 발판은 너무 좁아서 쓰지 않는다)
+                obstacleKinds = new[] { ObstacleKind.Sweep, ObstacleKind.Static, ObstacleKind.Sweep, ObstacleKind.VerticalMoving },
+                crumblingEveryNPlatforms = 5,
+                iceEveryNPlatforms = 2,
+            },
         };
 
         /// <summary>
@@ -180,7 +222,14 @@ namespace OnlyUp
 
         [Header("체크포인트(세이브 포인트) 설정")]
         [Tooltip("이 높이들을 처음 넘는 발판이 초록색 체크포인트로 바뀐다. 낙사해도 여기서부터 다시 시작한다")]
-        public float[] checkpointHeights = new float[] { 50f, 100f, 150f };
+        // 각 구간이 끝나는 높이(약 51 / 101 / 150 / 199m) 부근에 하나씩 둬서, 구간이 바뀌는 지점마다
+        // 진행 상황이 저장되게 한다. 200은 마지막 "잔해 지대" 구간 진입 직후의 발판이 된다.
+        public float[] checkpointHeights = new float[] { 50f, 100f, 150f, 200f };
+
+        [Header("얼음 발판 설정")]
+        [Tooltip("얼음 발판에서 초당 줄어드는 속도(감속도). 작을수록 더 미끄럽다. " +
+            "발판 밖으로 미끄러져 떨어지지 않도록 발판 크기에 따라 자동으로 하한이 걸린다(CourseKit.MinSafeSlipDeceleration)")]
+        public float iceSlipDeceleration = 20f;
 
         [Header("무너지는 발판 설정")]
         [Tooltip("밟은 뒤 무너지기까지의 시간(초). 이 동안 발판이 흔들려 경고를 준다")]
@@ -261,6 +310,24 @@ namespace OnlyUp
         private const float MinHorizontalOffsetRatio = 1.05f;
 
         /// <summary>
+        /// 얼음 발판은 같은 구간의 일반 발판보다 이 배율만큼 넓게 만든다.
+        ///
+        /// 미끄러지는 거리는 발판 크기와 상관없이 속도/감속도로 정해지는데(v²/2a), 발판이 좁으면
+        /// "발판 밖으로 미끄러져 떨어지지 않는다"는 보장을 지키기 위해 감속도 하한이 매우 커져서
+        /// (CourseKit.MinSafeSlipDeceleration) 결국 거의 미끄러지지 않는 발판이 되어버린다.
+        /// 그래서 얼음 발판만 넓게 만들어 미끄러질 여유 공간을 주고, 그 대신 "넓지만 제어가 어려운 발판"
+        /// 이라는 다른 성격의 도전으로 만든다.
+        /// </summary>
+        private const float IcePlatformSizeScale = 1.9f;
+
+        /// <summary>
+        /// 훑고 지나가는 장애물(Sweep)의 왕복 속도 배율. 같은 구간의 일반 왕복 장애물보다 이만큼 빠르다.
+        /// 단, 발판이 완전히 비는 시간이 너무 짧아지지 않도록 CourseKit.CreateSweepObstacle이
+        /// 최종 속도에 상한을 한 번 더 건다.
+        /// </summary>
+        private const float SweepSpeedMultiplier = 2.2f;
+
+        /// <summary>
         /// 패턴 공식(사인/코사인)이 우연히 두 성분을 동시에 0 근처로 만들면(위상이 겹치는 지점)
         /// 발판이 거의 바로 위/아래로 겹치게 배치되어 머리가 끼는 원인이 된다. 계산된 (dx,dz)의
         /// 길이가 두 발판 크기 기준 안전 최소값보다 작으면, 방향은 그대로 두고 길이만 늘려서
@@ -319,12 +386,21 @@ namespace OnlyUp
 
                     bool isTraverse = traverseRemaining > 0;
 
+                    // 얼음 발판인지는 위치를 계산하기 "전에" 정해야 한다 — 얼음은 일반 발판보다 넓어서
+                    // (IcePlatformSizeScale) 발판 사이 최소 수평 간격 계산에 들어가는 크기 자체가 달라지기
+                    // 때문이다. 옆으로 도는 구간은 이동 자체가 이미 도전이라 제외한다(장애물과 같은 이유).
+                    bool isIce = !isTraverse && !isVeryLast
+                        && zone.iceEveryNPlatforms > 0 && i % zone.iceEveryNPlatforms == 0;
+                    Vector3 platformSize = isIce
+                        ? new Vector3(zone.platformSize.x * IcePlatformSizeScale, zone.platformSize.y, zone.platformSize.z * IcePlatformSizeScale)
+                        : zone.platformSize;
+
                     // 마지막 칸은 구간 발판이 아니라 Goal 발판(goalPlatformSize)이 놓이는 자리다.
                     // Goal은 보통 구간 발판보다 훨씬 넓어서(예: 1.4 vs 5.0), 여기서 zone.platformSize로
                     // 최소 수평 간격을 계산하면 Goal 밑면이 직전 발판 바로 위를 덮어버려 마지막 점프에서
                     // 머리가 끼고 클리어 자체가 불가능해진다(실제로 궤적 시뮬레이션으로 충돌 확인).
                     // 그래서 마지막 칸만 Goal의 실제 크기로 간격을 계산한다.
-                    float curPlatformSizeX = isVeryLast ? goalPlatformSize.x : zone.platformSize.x;
+                    float curPlatformSizeX = isVeryLast ? goalPlatformSize.x : platformSize.x;
                     float minOffset = MinHorizontalOffsetRatio * (prevPlatformSizeX + curPlatformSizeX) * 0.5f;
                     Vector3 pos;
                     if (isTraverse)
@@ -357,6 +433,23 @@ namespace OnlyUp
                                 dx = Mathf.Sin(globalIndex * 2.3f) * zone.horizontalVariance;
                                 dz = Mathf.Cos(globalIndex * 1.9f) * zone.horizontalVariance;
                                 break;
+                            case MovementPattern.Spiral:
+                                // 나선 계단: 매 발판마다 나아가는 방향만 spiralAngleStepDeg씩 돌리고 거리는
+                                // 항상 horizontalVariance로 같게 둔다. 그래서 위에서 내려다보면 원을 그리며
+                                // 올라가고(잔해 지대 구간), 방향은 계속 바뀌어도 점프 거리는 늘 일정하다.
+                                // Tight처럼 두 성분이 동시에 0 근처가 되는 지점이 없어서(길이가 항상
+                                // horizontalVariance로 고정) 연속된 두 발판이 위아래로 겹칠 위험은 구조적으로 없다.
+                                //
+                                // 각도는 구간 설정값으로 뺐다. 처음엔 72도(다섯 발판에 한 바퀴)로 뒀는데,
+                                // 옆으로 도는 구간(Traverse) 바로 다음 발판이 나선이 되돌아오는 방향에 놓이면서
+                                // 그 발판이 Traverse 점프 경로 "바로 위"에 앉아 머리가 부딪히는 배치가 나왔다
+                                // (실측: 63번 발판에서 뛰면 5.5m 위의 65번 발판 밑면에 머리가 닿음).
+                                // 한 바퀴가 정수로 떨어지지 않는 각도(110도)로 바꾸면 같은 방향이 반복되지 않아
+                                // 이 겹침이 사라진다 — 캡슐 시뮬레이션으로 확인했다.
+                                float spiralRad = globalIndex * zone.spiralAngleStepDeg * Mathf.Deg2Rad;
+                                dx = Mathf.Cos(spiralRad) * zone.horizontalVariance;
+                                dz = Mathf.Sin(spiralRad) * zone.horizontalVariance;
+                                break;
                             case MovementPattern.Straight:
                             default:
                                 // 거의 수직으로 살짝만 흔들리며 안정적으로 직진 상승 (쓰레기장 구간)
@@ -380,15 +473,31 @@ namespace OnlyUp
                             && pos.y >= checkpointHeights[nextCheckpointIndex];
                         if (isCheckpoint) nextCheckpointIndex++;
 
+                        // 체크포인트 자리가 마침 얼음 차례와 겹치면 체크포인트를 우선한다 — 체크포인트는
+                        // "안전하게 숨 돌리는 지점"이어야 하므로 미끄러지면 안 된다. (위에서 이미 얼음 크기로
+                        // 간격을 계산해둔 상태인데, 그 간격은 필요한 것보다 넓기만 하므로 그대로 둬도 안전하다)
+                        if (isCheckpoint) isIce = false;
+
                         string label = isTraverse ? $"Platform_{globalIndex:00}_Traverse"
                             : isCheckpoint ? $"Checkpoint_{globalIndex:00}"
+                            : isIce ? $"IcePlatform_{globalIndex:00}"
                             : $"Platform_{globalIndex:00}";
-                        GameObject platformGO = CourseKit.CreatePlatform(courseParent, label, pos, zone.platformSize, isGoal: false, isCheckpoint: isCheckpoint);
+                        GameObject platformGO = CourseKit.CreatePlatform(courseParent, label, pos, platformSize, isGoal: false, isCheckpoint: isCheckpoint, isIce: isIce);
 
                         // 체크포인트는 Goal처럼 항상 단순한 발판으로 두고 장애물/무너짐을 섞지 않는다 —
                         // "안전하게 진행 상황을 저장하는 지점"이라는 역할에 집중시키기 위함이다.
                         if (isCheckpoint)
                         {
+                            prev = pos;
+                            continue;
+                        }
+
+                        // 얼음 발판도 장애물·무너짐을 겹쳐 얹지 않는다. "미끄러져서 제어가 어렵다"는 것 자체가
+                        // 이미 그 발판의 도전 요소라서(옆으로 도는 구간에 장애물을 두지 않는 것과 같은 이유),
+                        // 여기에 장애물까지 얹으면 미끄러지다 부딪혀 넉백당하는 운에 가까운 죽음이 나온다.
+                        if (isIce)
+                        {
+                            CourseKit.MakePlatformIce(platformGO, platformSize, iceSlipDeceleration);
                             prev = pos;
                             continue;
                         }
@@ -431,6 +540,19 @@ namespace OnlyUp
                                         basePos + new Vector3(travel * 0.5f, 0f, 0f),
                                         obstacleSize,
                                         zone.movingObstacleSpeed,
+                                        zone.movingKnockbackForce,
+                                        zone.movingKnockbackUpward);
+                                    break;
+                                }
+
+                                case ObstacleKind.Sweep:
+                                {
+                                    // 발판 폭 전체를 빠르게 훑고 지나간다. 왕복 범위와 속도 제한(=발판이
+                                    // 완전히 비는 시간 보장)은 CourseKit.CreateSweepObstacle이 계산한다.
+                                    Vector3 sweepCenter = pos + new Vector3(0f, zone.platformSize.y * 0.5f + 0.5f, 0f);
+                                    CourseKit.CreateSweepObstacle(
+                                        courseParent, sweepCenter, zone.platformSize.x, obstacleSize,
+                                        zone.movingObstacleSpeed * SweepSpeedMultiplier,
                                         zone.movingKnockbackForce,
                                         zone.movingKnockbackUpward);
                                     break;

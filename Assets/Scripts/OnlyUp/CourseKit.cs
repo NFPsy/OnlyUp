@@ -127,8 +127,11 @@ namespace OnlyUp
         /// isGoal과 isCheckpoint는 둘 다 "실제 3D 모델로 바꾸지 않고 색으로 구분되는 특수 발판"이라는
         /// 점이 같아서 같은 else-if 구조로 처리한다. rotationY를 주면 발판을 y축으로 회전시켜
         /// 좀 더 자연스러운 바위처럼 배치할 수 있다.
+        /// isIce면 일반 발판과 같은 방식으로 만들되 전용 모델 폴더(Resources/IcePlatforms)를 먼저 찾고,
+        /// 없으면 연한 하늘색으로 칠해 "여기는 미끄럽다"는 것을 밟기 전에 알아볼 수 있게 한다
+        /// (실제 미끄러짐 동작은 <see cref="MakePlatformIce"/>가 붙이는 <see cref="IcePlatform"/>이 담당).
         /// </summary>
-        public static GameObject CreatePlatform(Transform parent, string name, Vector3 position, Vector3 size, bool isGoal, float rotationY = 0f, bool isCheckpoint = false)
+        public static GameObject CreatePlatform(Transform parent, string name, Vector3 position, Vector3 size, bool isGoal, float rotationY = 0f, bool isCheckpoint = false, bool isIce = false)
         {
             GameObject platform = new GameObject(name);
             platform.transform.SetParent(parent, false);
@@ -183,9 +186,11 @@ namespace OnlyUp
             }
             else
             {
-                // Resources/Platforms에 VARCO 3D로 만든 발판 모델이 있으면 그 중 하나를 무작위로 골라 교체하고,
-                // 없으면(모델이 아직 없을 때) 기존처럼 연한 보라색 큐브로 대체한다.
-                GameObject[] rockPrefabs = Resources.LoadAll<GameObject>("Platforms");
+                // Resources/Platforms(일반 발판)나 Resources/IcePlatforms(얼음 발판)에 VARCO 3D로 만든
+                // 모델이 있으면 그 중 하나를 무작위로 골라 교체하고, 없으면(모델이 아직 없을 때) 색이 다른
+                // 큐브로 대체한다. 얼음만 전용 폴더를 따로 보는 이유는 일반 발판 모델을 그대로 쓰면 겉보기로
+                // 구분이 안 돼서 밟기 전에 "여기는 미끄럽다"는 걸 알 수 없기 때문이다.
+                GameObject[] rockPrefabs = Resources.LoadAll<GameObject>(isIce ? "IcePlatforms" : "Platforms");
                 if (rockPrefabs != null && rockPrefabs.Length > 0)
                 {
                     GameObject chosen = rockPrefabs[Random.Range(0, rockPrefabs.Length)];
@@ -203,7 +208,10 @@ namespace OnlyUp
                 }
                 else
                 {
-                    SetUniqueColor(visual.GetComponent<Renderer>(), new Color(0.78f, 0.65f, 0.95f));
+                    // Goal(노랑)·Checkpoint(초록)처럼 특수 발판은 색으로 구분한다는 기존 방식을 그대로 따른다
+                    SetUniqueColor(visual.GetComponent<Renderer>(), isIce
+                        ? new Color(0.62f, 0.89f, 0.98f)   // 연한 하늘색 = 미끄러운 얼음 발판
+                        : new Color(0.78f, 0.65f, 0.95f)); // 연보라 = 일반 발판
                 }
             }
 
@@ -326,15 +334,19 @@ namespace OnlyUp
         }
 
         /// <summary>
-        /// Resources/Obstacles에 실제 3D 장애물 모델이 있으면 그 중 하나를 무작위로 골라 Visual을
-        /// 교체하고, 없으면(모델이 아직 없을 때) 기존처럼 단색 큐브로 남겨둔다.
+        /// 지정한 Resources 폴더(기본 "Obstacles")에 실제 3D 장애물 모델이 있으면 그 중 하나를 무작위로
+        /// 골라 Visual을 교체하고, 없으면(모델이 아직 없을 때) 기존처럼 단색 큐브로 남겨둔다.
         /// 발판(CreatePlatform)과 달리 콜라이더는 손대지 않는다 — 장애물의 충돌 판정은 항상
         /// 코드로 계산한 obstacleSize 박스 그대로 유지해야, 모델이 어떤 모양이든(둥근 구 등)
         /// 장애물 크기에 비례한 착지 공간 계산(GameBootstrap의 가장자리 배치/레이캐스트)이 그대로 맞는다.
+        ///
+        /// 훑고 지나가는 장애물(Sweep)은 전용 폴더를 따로 본다. 공용 모델(구슬)을 그대로 쓰면 평범한
+        /// 왕복 장애물과 겉모습이 똑같아져서, 빠르게 훑고 오는 것을 밟기 전에 알아볼 수 없기 때문이다 —
+        /// 전용 모델이 없으면 공용 모델로 내려가지 않고 바로 색이 다른 큐브로 대체한다.
         /// </summary>
-        private static void ApplyObstacleVisual(VisualSwapTarget visualSwap, PlatformColliderSync sync, GameObject fallbackCubeVisual, Color fallbackColor)
+        private static void ApplyObstacleVisual(VisualSwapTarget visualSwap, PlatformColliderSync sync, GameObject fallbackCubeVisual, Color fallbackColor, string modelFolder = "Obstacles")
         {
-            GameObject[] obstacleModels = Resources.LoadAll<GameObject>("Obstacles");
+            GameObject[] obstacleModels = Resources.LoadAll<GameObject>(modelFolder);
             if (obstacleModels != null && obstacleModels.Length > 0)
             {
                 GameObject chosen = obstacleModels[Random.Range(0, obstacleModels.Length)];
@@ -383,7 +395,18 @@ namespace OnlyUp
         /// </summary>
         public static void CreateMovingObstacle(Transform parent, Vector3 pointA, Vector3 pointB, Vector3 obstacleSize, float speed = 0.6f, float knockbackForce = 16f, float knockbackUpward = 7f)
         {
-            GameObject obstacle = new GameObject("Obstacle_Moving");
+            CreateBackAndForthObstacle("Obstacle_Moving", parent, pointA, pointB, obstacleSize, speed,
+                knockbackForce, knockbackUpward, new Color(1f, 0.45f, 0f), "Obstacles");
+        }
+
+        /// <summary>
+        /// 왕복(MovingObstacle) 장애물을 실제로 만드는 공통 부분. 가로 왕복(Moving)·위아래 왕복
+        /// (VerticalMoving)·빠르게 훑고 지나가는 장애물(Sweep)이 전부 같은 구조라서 여기로 모았고,
+        /// 이름·대체 색·모델 폴더만 종류별로 다르게 넘긴다.
+        /// </summary>
+        private static void CreateBackAndForthObstacle(string name, Transform parent, Vector3 pointA, Vector3 pointB, Vector3 obstacleSize, float speed, float knockbackForce, float knockbackUpward, Color fallbackColor, string modelFolder)
+        {
+            GameObject obstacle = new GameObject(name);
             obstacle.transform.SetParent(parent, false);
             obstacle.transform.position = pointA;
 
@@ -404,7 +427,7 @@ namespace OnlyUp
             sync.targetCollider = collider;
             sync.visual = visual.transform;
 
-            ApplyObstacleVisual(visualSwap, sync, visual, new Color(1f, 0.45f, 0f));
+            ApplyObstacleVisual(visualSwap, sync, visual, fallbackColor, modelFolder);
 
             Obstacle obstacleScript = obstacle.AddComponent<Obstacle>();
             obstacleScript.knockbackForce = knockbackForce;
@@ -414,6 +437,49 @@ namespace OnlyUp
             mover.pointA = pointA;
             mover.pointB = pointB;
             mover.speed = speed;
+        }
+
+        /// <summary>
+        /// 장애물이 발판 가로 범위에서 완전히 벗어나 있어야 하는 최소 시간(초).
+        /// 이 시간이 있어야 "기다렸다가 지나간다"가 가능해진다 — 발판 폭(약 1.25)을 이동 속도(7)로
+        /// 가로지르는 데 걸리는 시간이 0.18초 정도이므로, 반응 시간까지 감안해 0.3초로 잡았다.
+        /// </summary>
+        public const float SweepMinFreeWindowSeconds = 0.3f;
+
+        /// <summary>
+        /// 발판 위를 좌우로 빠르게 훑고 지나가는 장애물(Sweep)을 놓는다. 왕복 자체는 기존
+        /// <see cref="MovingObstacle"/>을 그대로 재사용하고, 두 가지만 다르게 계산한다.
+        ///
+        /// 1. 왕복 범위: 발판 폭 전체 + 양쪽 바깥으로 발판 폭만큼(clearance) 더 나갔다 돌아온다.
+        ///    그래서 왕복의 양 끝에서는 장애물이 발판 가로 범위 밖으로 완전히 빠져, 발판이 통째로 빈다.
+        /// 2. 속도: 아무리 빨라도 "발판이 완전히 비어있는 시간"이 <see cref="SweepMinFreeWindowSeconds"/>
+        ///    밑으로는 내려가지 않도록 제한한다. 비는 시간은 아래처럼 계산된다.
+        ///
+        ///    장애물 중심 x(t) = -halfTravel + 2*halfTravel*t  (t는 0↔1을 왕복, 1초에 speed만큼 진행)
+        ///    발판이 완전히 비는 조건: |x| >= platformHalf + obstacleHalf  →  t <= clearance / (2*halfTravel)
+        ///    왕복이라 끝점을 중심으로 양쪽이 이어지므로, 실제로 비는 시간 = clearance / (halfTravel * speed)
+        ///
+        /// 반환값은 그렇게 실제로 확보된 "완전히 비는 시간(초)"이다 (호출부에서 검증/로그에 쓴다).
+        /// </summary>
+        public static float CreateSweepObstacle(Transform parent, Vector3 center, float platformWidth, Vector3 obstacleSize, float requestedSpeed, float knockbackForce = 16f, float knockbackUpward = 7f)
+        {
+            float platformHalf = platformWidth * 0.5f;
+            float obstacleHalf = obstacleSize.x * 0.5f;
+            float clearance = platformWidth; // 발판 폭만큼 더 바깥까지 나갔다 온다
+            float halfTravel = platformHalf + obstacleHalf + clearance;
+
+            float maxSpeed = clearance / (halfTravel * SweepMinFreeWindowSeconds);
+            float speed = Mathf.Min(requestedSpeed, maxSpeed);
+
+            CreateBackAndForthObstacle(
+                "Obstacle_Sweep", parent,
+                center + new Vector3(-halfTravel, 0f, 0f),
+                center + new Vector3(halfTravel, 0f, 0f),
+                obstacleSize, speed, knockbackForce, knockbackUpward,
+                new Color(0.2f, 0.85f, 0.95f), // 밝은 하늘색 큐브 — 전용 모델(Resources/SweepObstacles)이 없을 때
+                "SweepObstacles");
+
+            return clearance / (halfTravel * speed);
         }
 
         /// <summary>
@@ -477,6 +543,64 @@ namespace OnlyUp
 
             VisualSwapTarget visualSwap = platform.GetComponent<VisualSwapTarget>();
             if (visualSwap != null) crumbling.visual = visualSwap.visual;
+        }
+
+        /// <summary>
+        /// 캐릭터 캡슐의 반지름. CreatePlayer가 CharacterController에 넣는 값(0.4)과 같아야 한다 —
+        /// 얼음 발판에서 "가장자리까지 남은 여유"를 계산할 때 캐릭터 몸 두께를 빼야 하기 때문이다.
+        /// </summary>
+        private const float PlayerCapsuleRadius = 0.4f;
+
+        /// <summary>
+        /// 얼음 미끄러짐 계산에 쓰는 플레이어 최고 이동 속도. <see cref="PlayerController.moveSpeed"/>의
+        /// 기본값(7)과 같아야 한다 (VerticalMoving 장애물이 캐릭터 키 2.0을 상수로 쓰는 것과 같은 방식).
+        /// </summary>
+        private const float PlayerMoveSpeed = 7f;
+
+        /// <summary>
+        /// 이 발판 크기에서 허용되는 "가장 미끄러운 정도"(= 감속도의 하한)를 계산한다.
+        ///
+        /// 최고 속도로 발판 한가운데에 착지한 직후 키를 놓았을 때 미끄러지는 거리는 물리 공식으로
+        /// v² / (2a) 다(v = 이동 속도, a = 감속도). 이 거리가 "발판 중심에서 가장자리까지 - 캐릭터 반지름"
+        /// 보다 길면 손을 뗐는데도 그대로 발판 밖으로 미끄러져 떨어지게 되어 억울한 죽음이 된다.
+        /// 그래서 그 여유 안에서 반드시 멈추도록 감속도의 하한(= 미끄러움의 상한)을 되돌려준다.
+        /// 발판이 좁을수록 이 값이 커져서(덜 미끄럽게) 자동으로 안전해진다.
+        ///
+        /// 여유를 그대로 다 쓰지 않고 <see cref="SlipSafetyFactor"/>만큼만 쓰는 이유: 여유를 꽉 채워
+        /// 계산하면 "정확히 한가운데에 착지해서 그 즉시 키를 놓는" 최선의 경우에만 가장자리에 딱 걸쳐
+        /// 멈춘다. 실제로는 중심에서 조금 벗어나 착지하거나 키를 놓는 게 한 박자 늦기 마련이므로,
+        /// 그만큼을 미리 빼두어야 "미끄러져서 떨어지는 일은 없다"가 실제로 지켜진다.
+        /// </summary>
+        public static float MinSafeSlipDeceleration(float platformWidth)
+        {
+            float safeMargin = Mathf.Max(0.1f, platformWidth * 0.5f - PlayerCapsuleRadius) * SlipSafetyFactor;
+            return (PlayerMoveSpeed * PlayerMoveSpeed) / (2f * safeMargin);
+        }
+
+        /// <summary>
+        /// 얼음에서 미끄러지는 거리를 발판 여유의 몇 배까지만 허용할지 (0.8 = 여유의 80%까지만 사용).
+        /// 남은 20%는 "한가운데에 정확히 착지하지 못했거나 키를 놓는 게 늦었을 때"를 위한 안전 여유다.
+        /// </summary>
+        private const float SlipSafetyFactor = 0.8f;
+
+        /// <summary>
+        /// 이미 만들어진 발판을 "밟으면 미끄러지는 얼음 발판"으로 바꾼다.
+        /// (밟힘 감지 트리거를 붙이고 전용 컴포넌트를 다는 방식은 <see cref="MakePlatformCrumbling"/>과 동일)
+        ///
+        /// 감속도는 요청값(baseSlipDeceleration)과 <see cref="MinSafeSlipDeceleration"/>이 계산한 하한 중
+        /// 큰 값을 쓴다 — "원하는 만큼 미끄럽게 하되, 발판 크기가 감당할 수 있는 한도까지만"이라는 뜻이다.
+        /// </summary>
+        public static IcePlatform MakePlatformIce(GameObject platform, Vector3 platformSize, float baseSlipDeceleration)
+        {
+            // 발판 윗면(로컬 +size.y/2)부터 캐릭터 키 남짓한 높이까지를 밟힘 감지 영역으로 삼는다
+            BoxCollider trigger = platform.AddComponent<BoxCollider>();
+            trigger.isTrigger = true;
+            trigger.center = new Vector3(0f, platformSize.y * 0.5f + 1f, 0f);
+            trigger.size = new Vector3(platformSize.x * 0.9f, 2f, platformSize.z * 0.9f);
+
+            IcePlatform ice = platform.AddComponent<IcePlatform>();
+            ice.slipDeceleration = Mathf.Max(baseSlipDeceleration, MinSafeSlipDeceleration(platformSize.x));
+            return ice;
         }
 
         /// <summary>
