@@ -279,6 +279,23 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 - 발판을 편집할 땐 Hierarchy에서 **부모 오브젝트**(예: `Platform_05`)를 선택하는 것이 안전합니다. 자식 `Visual`을
   직접 늘리거나 옮겨도 `PlatformColliderSync`가 자동으로 충돌 범위를 맞춰주지만, 헷갈리지 않으려면 부모를 다루는 편이 낫습니다.
 
+### 플레이 중 원하는 구간으로 바로 이동하기 (에디터 전용)
+
+코스가 길어질수록(현재 75개 발판) 뒤쪽 구간만 반복 테스트하려고 매번 처음부터 다시 오르는 건 비효율적이다.
+[`DebugCourseTeleport.cs`](Assets/Scripts/OnlyUp/DebugCourseTeleport.cs)를 붙여서, Play 모드에서 키 입력만으로
+원하는 발판으로 순간이동할 수 있게 했다.
+
+- **숫자키 1~5**: 각 구간(1구간 쓰레기장 ~ 5구간 잔해 지대)의 첫 발판으로 이동
+- **Page Up / Page Down**: 지금 위치에서 발판 한 칸씩 앞/뒤로 이동
+
+이동한 자리로 `RespawnController.spawnPosition`도 같이 옮겨서, 그 구간에서 떨어져 죽어도 처음이 아니라
+방금 이동한 자리로 다시 리스폰된다(체크포인트의 "더 높을 때만 갱신" 규칙과 달리, 테스트 목적이라 항상
+덮어쓴다). 코스 오브젝트 이름(`Platform_NN`, `Checkpoint_NN`, `IcePlatform_NN`)에 박힌 전체 발판 번호로
+순서를 정렬해 구간·체크포인트·얼음 발판을 가리지 않고 전부 대상으로 삼는다.
+
+**파일 전체가 `#if UNITY_EDITOR`로 감싸져 있어 실제 빌드(WebGL 등)에는 포함되지 않는다** — 플레이어가
+숫자키나 Page Up/Down을 눌러도 아무 일도 일어나지 않으며, itch.io에 배포되는 빌드와는 무관한 순수 개발용 도구다.
+
 ## 스크립트 목록 (`Assets/Scripts/OnlyUp/`)
 
 | 스크립트 | 역할 |
@@ -302,6 +319,7 @@ Play 없이 코스가 실제 씬 오브젝트로 생성되어 Hierarchy/Scene �
 | `RotatingObstacle.cs` | 발판 중심 주위를 계속 공전하는 장애물 |
 | `CrumblingPlatform.cs` | 밟으면 잠시 뒤 무너졌다가 다시 생기는 발판 |
 | `IcePlatform.cs` | 밟고 있는 동안 플레이어 이동에 관성을 줘서 미끄러지게 하는 발판 |
+| `DebugCourseTeleport.cs` | (에디터 전용) 숫자키 1~5/Page Up·Down으로 원하는 구간·발판으로 순간이동하는 테스트 도구 |
 | `VisualSwapTarget.cs` | Visual 자식 교체(모델 스왑)를 위한 공용 컴포넌트 |
 | `PlatformColliderSync.cs` | 에디터에서 Visual 변경 시 부모 Collider 자동 동기화 |
 
